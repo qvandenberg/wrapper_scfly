@@ -356,7 +356,7 @@ class extract:
         if (i_end == None):
             self.i_end = i_max
         if (t_start == None):
-            self.t_start = 2
+            self.t_start = 1
         if (t_end == None):
             self.t_end = inputParameters.size_timegrid
 
@@ -373,38 +373,34 @@ class extract:
         self.conditions_logfile.write('Intensity folders considered for temperature-density evolution:\ti%s until i%s\n' % (str(self.i_start),str(self.i_end)))
         self.conditions_logfile.write('Time steps considered:\t%s until %s\n' %(str(self.t_start),str(self.t_end)))
 
+        # Weigh conditions to f-scan weighted value
+        if (os.path.isfile(self.basepath+"/processed_data/fscanweights")==False):
+            print "Temperature-density conditions can't be f-scan weighted as weights don't exist. Run spec.fscan first."
+        fscan_flag = ((os.path.isfile(self.basepath+"/processed_data/fscanweights")==True) and ((os.path.isfile(self.basepath+"/processed_data/conditions/trho_fscanweighted.txt")==False) or (user_yes_no_query("Overwrite f-scan weighted T-rho?")==True)))
+        if (fscan_flag==True):
+            data = np.loadtxt(self.basepath+"/processed_data/fscanweights", skiprows=1)
+            weights = data[:,2]
+        trhofscan_out = open(self.basepath+"/processed_data/conditions/trho_fscanweighted.txt",'w+a')
+        trhofscan_out.write("%s\t%s\t%s\t%s\n" %('Time index','Time [s]','Temperature [eV]','Density [/cc]'))
+
         for i in range(self.i_start,self.i_end+1):
             i_folderpath = os.path.join(self.basepath, "i" + str(i),"output","zb.i"+str(i))
             data = np.loadtxt(i_folderpath, skiprows=1)
-            if (i==self.i_start):
-                self.time_grid = data[:,1]
+            if i==self.i_start:
+                T_fscan = np.zeros(data.shape[0])
+                rho_fscan = np.zeros(data.shape[0])
             trho_out = open(self.basepath+"/processed_data/conditions/trho_i%d.txt" %(i),'w+a')
             trho_out.write("%s\t%s\t%s\t%s\n" %('Time index','Time [s]','Temperature [eV]','Density [/cc]'))
-            # Write out data
+            # Add contribution to total f-scan
+            T_fscan += weights[i-1]*data[:,2]
+            rho_fscan += weights[i-1]*data[:,3]
+            # Write out data per i folder
             for j in range(data.shape[0]):
                 trho_out.write("%d\t%1.2e\t%1.2f\t%1.2e\n" %(j+1,data[j,1],data[j,2],data[j,3])) # index, time, temperature, density
+                trhofscan_out.write("%d\t%1.2e\t%1.2f\t%1.2e\n" %(int(j+1),data[j,1],T_fscan[j],rho_fscan[j]))
+            trho_out.close()
+        trhofscan_out.close()
 
-        # Weigh temperatures together to effective temperature with fscan
-        if (os.path.isfile(self.basepath+"/processed_data/fscanweights")==False):
-            print "Temperature-density conditions can't be f-scan weighted as weights don't exist. Run spec.fscan first."
-        weights = []
-        # if weights exist, and f-scan weighted temperature does not exist or should be overwritten
-        if ((os.path.isfile(self.basepath+"/processed_data/fscanweights")==True) and ((os.path.isfile(self.basepath+"/processed_data/conditions/trho_fscanweighted.txt")==False) or (user_yes_no_query("Overwrite f-scan weighted T-rho?")==True))):
-            data = np.loadtxt(self.basepath+"/processed_data/fscanweights", skiprows=1)
-            weights = data[:,2]
-            trhofscan_out = open(self.basepath+"/processed_data/conditions/trho_fscanweighted.txt",'w+a')
-            trhofscan_out.write("%s\t%s\t%s\t%s\n" %('Time index','Time [s]','Temperature [eV]','Density [/cc]'))
-
-            time_fscan = np.zeros(self.time_grid.shape)
-            T_fscan = time_fscan
-            rho_fscan = time_fscan
-            for i in range(self.i_start,self.i_end+1):
-                data = np.loadtxt(self.basepath+"/processed_data/conditions/trho_i%d.txt" %(i), delimiter='\t',converters = {0: float}, skiprows=1)
-                print T_fscan.shape, weights.shape, data[:,2].shape, i, data.shape, max(data[:,0])
-                T_fscan += weights[i-1]*data[:,2]
-                rho_fscan += weights[i-1]*data[:,3]
-            for j in range(self.time_grid):
-                trhofscan_out.write("%d\t%1.2e\t%1.2f\t%1.2e\n" %(int(j+1),self.time_grid[j],T_fscan[j],rho_fscan[j]))
 
         # def populations():
         # def rates():

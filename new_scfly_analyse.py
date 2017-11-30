@@ -22,12 +22,11 @@ if len(sys.argv) != 2:
 init = initFolderStructure(sys.argv[1])
 input_parameters = loadInput(sys.argv[1])
 
-## Time integrate emission spectra
+# # Time integrate emission spectra
 # spec = timeIntSpec(input_parameters) # (input parameters, i_start, i_end, t_start, t_end) only "input parameters" is mandatory
 # spec.time_integrate(input_parameters)
 
-## Apply f-scan. Build in synchronisation/lock threads.
-# make sure spectra are written out before executing this part.
+## Apply f-scan. Build in synchronisation/lock threads. Make sure spectra are written out before executing this part.
 # supergauss_parameters = [0.957467, 3.54691, 0.46181, 0.042533, 0.1929, 0.21648] #
 # spec.fscan(supergauss_parameters)
 
