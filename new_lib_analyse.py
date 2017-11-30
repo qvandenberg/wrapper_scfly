@@ -360,13 +360,14 @@ class extract:
         if (t_end == None):
             self.t_end = inputParameters.size_timegrid
 
-        self.conditions_logfile = open(self.basepath+"/processed_data/conditions/conditions.log",'w+a')
         if ((not os.path.isdir(self.basepath+"/processed_data/conditions")) or (user_yes_no_query("Overwrite /processed_data/conditions extracted plasma conditions folder?") == True)):
             call(["rm","-r",os.path.join(self.basepath,"processed_data/conditions")])
             call(["mkdir",self.basepath+"/processed_data/conditions"])
             print "New folder created: %s" %(os.path.join(self.basepath,"processed_data/conditions"))
         else:
             print "Folder already existed to store conditions: %s" %(os.path.join(self.basepath,"processed_data/conditions"))
+        self.conditions_logfile = open(self.basepath+"/processed_data/conditions/conditions.log",'w+a')
+
 
     def temperature_density(self,inputParameters):
         self.conditions_logfile.write('Intensity folders considered for temperature-density evolution:\ti%s until i%s\n' % (str(self.i_start),str(self.i_end)))
@@ -398,14 +399,16 @@ class extract:
             T_fscan = time_fscan
             rho_fscan = time_fscan
             for i in range(self.i_start,self.i_end+1):
-                print "line 401 %d "  %i , os.path.isfile(self.basepath+"/processed_data/conditions/trho_i%d.txt" %(i))
-                data = np.loadtxt(self.basepath+"/processed_data/conditions/trho_i%d.txt" %(i), delimiter=' ', skiprows=1)
-                T_fscan += weights[i]*data[:,2]
-                rho_fscan += weights[i]*data[:,3]
+                data = np.loadtxt(self.basepath+"/processed_data/conditions/trho_i%d.txt" %(i), delimiter='\t',converters = {0: float}, skiprows=1)
+                print T_fscan.shape, weights.shape, data[:,2].shape, i, data.shape, max(data[:,0])
+                T_fscan += weights[i-1]*data[:,2]
+                rho_fscan += weights[i-1]*data[:,3]
             for j in range(self.time_grid):
-                trhofscan_out.write("%d\t%1.2e\t%1.2f\t%1.2e\n" %(j,self.time_grid[j],T_fscan[j],rho_fscan[j]))
+                trhofscan_out.write("%d\t%1.2e\t%1.2f\t%1.2e\n" %(int(j+1),self.time_grid[j],T_fscan[j],rho_fscan[j]))
 
         # def populations():
+        # def rates():
+
 
 
 
