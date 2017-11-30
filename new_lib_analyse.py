@@ -380,24 +380,27 @@ class extract:
         if (fscan_flag==True):
             data = np.loadtxt(self.basepath+"/processed_data/fscanweights", skiprows=1)
             weights = data[:,2]
-        trhofscan_out = open(self.basepath+"/processed_data/conditions/trho_fscanweighted.txt",'w+a')
-        trhofscan_out.write("%s\t%s\t%s\t%s\n" %('Time index','Time [s]','Temperature [eV]','Density [/cc]'))
+            trhofscan_out = open(self.basepath+"/processed_data/conditions/trho_fscanweighted.txt",'w+a')
+            trhofscan_out.write("%s\t%s\t%s\t%s\n" %('Time index','Time [s]','Temperature [eV]','Density [/cc]'))
 
         for i in range(self.i_start,self.i_end+1):
             i_folderpath = os.path.join(self.basepath, "i" + str(i),"output","zb.i"+str(i))
             data = np.loadtxt(i_folderpath, skiprows=1)
-            if i==self.i_start:
-                T_fscan = np.zeros(data.shape[0])
-                rho_fscan = np.zeros(data.shape[0])
             trho_out = open(self.basepath+"/processed_data/conditions/trho_i%d.txt" %(i),'w+a')
             trho_out.write("%s\t%s\t%s\t%s\n" %('Time index','Time [s]','Temperature [eV]','Density [/cc]'))
-            # Add contribution to total f-scan
-            T_fscan += weights[i-1]*data[:,2]
-            rho_fscan += weights[i-1]*data[:,3]
-            # Write out data per i folder
-            for j in range(data.shape[0]):
-                trho_out.write("%d\t%1.2e\t%1.2f\t%1.2e\n" %(j+1,data[j,1],data[j,2],data[j,3])) # index, time, temperature, density
-                trhofscan_out.write("%d\t%1.2e\t%1.2f\t%1.2e\n" %(int(j+1),data[j,1],T_fscan[j],rho_fscan[j]))
+
+            if fscan_flag==True:
+                if (i==self.i_start):
+                    T_fscan = np.zeros(data.shape[0])
+                    rho_fscan = np.zeros(data.shape[0])
+                # Add contribution to total f-scan
+                T_fscan += weights[i-1]*data[:,2]
+                rho_fscan += weights[i-1]*data[:,3]
+                # Write out data per i folder
+                for j in range(data.shape[0]):
+                    trho_out.write("%d\t%1.2e\t%1.2f\t%1.2e\n" %(j+1,data[j,1],data[j,2],data[j,3])) # index, time, temperature, density
+                    if (i==self.i_end):
+                        trhofscan_out.write("%d\t%1.2e\t%1.2f\t%1.2e\n" %(int(j+1),data[j,1],T_fscan[j],rho_fscan[j]))
             trho_out.close()
         trhofscan_out.close()
 
