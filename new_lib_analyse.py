@@ -373,7 +373,7 @@ class extract:
         self.conditions_logfile.write('Time steps considered:\t%s until %s\n' %(str(self.t_start),str(self.t_end)))
 
         for i in range(self.i_start,self.i_end+1):
-            i_folderpath = os.path.join(inputParameters.basepath, "i" + str(i),"output","zb.i"+str(i))
+            i_folderpath = os.path.join(self.basepath, "i" + str(i),"output","zb.i"+str(i))
             data = np.loadtxt(i_folderpath, skiprows=1)
             if (i==self.i_start):
                 self.time_grid = data[:,1]
@@ -381,14 +381,14 @@ class extract:
             trho_out.write("%s\t%s\t%s\t%s\n" %('Time index','Time [s]','Temperature [eV]','Density [/cc]'))
             # Write out data
             for j in range(data.shape[0]):
-                trho_out.write("%d\t%1.2e\t%1.2f\t%1.2e\n" %(j,data[j,1],data[j,2],data[j,3])) # index, time, temperature, density
+                trho_out.write("%d\t%1.2e\t%1.2f\t%1.2e\n" %(j+1,data[j,1],data[j,2],data[j,3])) # index, time, temperature, density
 
         # Weigh temperatures together to effective temperature with fscan
         if (os.path.isfile(self.basepath+"/processed_data/fscanweights")==False):
             print "Temperature-density conditions can't be f-scan weighted as weights don't exist. Run spec.fscan first."
         weights = []
         # if weights exist, and f-scan weighted temperature does not exist or should be overwritten
-        if ((os.path.isfile(self.basepath+"/processed_data/fscanweights")==True) and ((os.path.isfile(self.basepath+"/processed_data/conditions/trho_fscanweighted.txt")==False) or (user_yes_no_query("Overwrite f-scan weighted T-rho?")==True)):
+        if ((os.path.isfile(self.basepath+"/processed_data/fscanweights")==True) and ((os.path.isfile(self.basepath+"/processed_data/conditions/trho_fscanweighted.txt")==False) or (user_yes_no_query("Overwrite f-scan weighted T-rho?")==True))):
             data = np.loadtxt(self.basepath+"/processed_data/fscanweights", skiprows=1)
             weights = data[:,2]
             trhofscan_out = open(self.basepath+"/processed_data/conditions/trho_fscanweighted.txt",'w+a')
@@ -398,13 +398,18 @@ class extract:
             T_fscan = time_fscan
             rho_fscan = time_fscan
             for i in range(self.i_start,self.i_end+1):
-                data = np.loadtxt(self.basepath+"/processed_data/conditions/trho_i%d.txt" %(i), skiprows=1)
+                print "line 401 %d "  %i , os.path.isfile(self.basepath+"/processed_data/conditions/trho_i%d.txt" %(i))
+                data = np.loadtxt(self.basepath+"/processed_data/conditions/trho_i%d.txt" %(i), delimiter=' ', skiprows=1)
                 T_fscan += weights[i]*data[:,2]
                 rho_fscan += weights[i]*data[:,3]
             for j in range(self.time_grid):
                 trhofscan_out.write("%d\t%1.2e\t%1.2f\t%1.2e\n" %(j,self.time_grid[j],T_fscan[j],rho_fscan[j]))
 
-        def populations():
+        # def populations():
+
+
+
+
 
 
 
