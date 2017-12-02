@@ -360,6 +360,10 @@ class extract:
         if (t_end == None):
             self.t_end = inputParameters.size_timegrid
 
+
+
+    def temperature_density(self,inputParameterse):
+        # Set up directory
         if ((not os.path.isdir(self.basepath+"/processed_data/conditions")) or (user_yes_no_query("Overwrite /processed_data/conditions extracted plasma conditions folder?") == True)):
             call(["rm","-r",os.path.join(self.basepath,"processed_data/conditions")])
             call(["mkdir",self.basepath+"/processed_data/conditions"])
@@ -367,9 +371,6 @@ class extract:
         else:
             print "Folder already existed to store conditions: %s" %(os.path.join(self.basepath,"processed_data/conditions"))
         self.conditions_logfile = open(self.basepath+"/processed_data/conditions/conditions.log",'w+a')
-
-
-    def temperature_density(self,inputParameters):
         self.conditions_logfile.write('Intensity folders considered for temperature-density evolution:\ti%s until i%s\n' % (str(self.i_start),str(self.i_end)))
         self.conditions_logfile.write('Time steps considered:\t%s until %s\n' %(str(self.t_start),str(self.t_end)))
 
@@ -394,8 +395,8 @@ class extract:
                     T_fscan = np.zeros(data.shape[0])
                     rho_fscan = np.zeros(data.shape[0])
                 # Add contribution to total f-scan
-                T_fscan += weights[i-1]*data[:,2]
-                rho_fscan += weights[i-1]*data[:,3]
+                T_fscan += weights[i-1]*data[:,2]/sum(weights[self.i_start:self.i_end])
+                rho_fscan += weights[i-1]*data[:,3]/sum(weights[self.i_start:self.i_end])
                 # Write out data per i folder
                 for j in range(data.shape[0]):
                     trho_out.write("%d\t%1.2e\t%1.2f\t%1.2e\n" %(j+1,data[j,1],data[j,2],data[j,3])) # index, time, temperature, density
@@ -405,7 +406,22 @@ class extract:
         trhofscan_out.close()
 
 
-        # def populations():
+    def populations(self, popstring):
+        # Set up directory
+        if ((not os.path.isdir(self.basepath+"/processed_data/populations")) or (user_yes_no_query("Overwrite /processed_data/populations extracted populations folder?") == True)):
+            call(["rm","-r",os.path.join(self.basepath,"processed_data/populations")])
+            call(["mkdir",self.basepath+"/processed_data/populations"])
+            print "New folder created: %s" %(os.path.join(self.basepath,"processed_data/populations"))
+        else:
+            print "Folder already existed to store conditions: %s" %(os.path.join(self.basepath,"processed_data/populations"))
+        self.conditions_logfile = open(self.basepath+"/processed_data/populations/populations.log",'w+a')
+        self.conditions_logfile.write('Intensity folders considered for population evolution:\ti%s until i%s\n' % (str(self.i_start),str(self.i_end)))
+        self.conditions_logfile.write('Time steps considered:\t%s until %s\n' %(str(self.t_start),str(self.t_end)))
+
+# Construct charge and material dependence to build population string
+
+
+
         # def rates():
 
 
