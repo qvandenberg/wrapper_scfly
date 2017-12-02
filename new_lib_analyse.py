@@ -123,6 +123,20 @@ class loadInput:
 
                         loadInput.fileCount += 1
 
+              if self.material == "C":
+                  self.Z = 6;
+              elif self.material == "Mg":
+                  self.Z = 12;
+              elif self.material == "F":
+                  self.Z = 9;
+              elif self.material == "Al":
+                  self.Z = 13;
+              elif self.material == "Si":
+                  self.Z = 14;
+              else:
+                  print "Add material to input routine to determine self.Z"
+
+
     def displayCount(self):
         print "Total amount of input parameters: %d" % loadInput.fileCount
 
@@ -402,11 +416,69 @@ class extract:
                     if (i==self.i_end):
                         trhofscan_out.write("%d\t%1.2e\t%1.2f\t%1.2e\n" %(int(j+1),data[j,1],T_fscan[j],rho_fscan[j]))
             trho_out.close()
-        trhofscan_out.close()
+                # trhofscan_out.close()
 
 
         # def populations():
-        # def rates():
+
+
+    def rates(self,inputParameters,charge_range,state,rate_process): # self, input_parameters, [charge start, charge end], states element, rate_processes element
+        ## Create directory and update log file
+        rates_outdirectory = os.path.join(self.basepath,"processed_data/rates")
+        if ((not os.path.isdir(rates_outdirectory)) or (user_yes_no_query("Overwrite /processed_data/rates extracted rates folder?") == True)):
+            call(["rm","-r",rates_outdirectory])
+            call(["mkdir",rates_outdirectory])
+            print "New folder created: %s" %(rates_outdirectory)
+        else:
+            print "Folder already existed to store conditions: %s" %(rates_outdirectory)
+        print 'Rates extracted on '+datetime.datetime.now().strftime("%Y-%m-%d-%H:%M:%S")+ "\n"
+        self.rates_logfile = open(os.path.join(rates_outdirectory,"rates.log"),'w+a')
+        self.rates_logfile.write('Rates extracted on '+datetime.datetime.now().strftime("%Y-%m-%d-%H:%M:%S")+ "\n")
+        self.rates_logfile.write("Drawn from directory %s\n" %(self.basepath))
+        self.rates_logfile.write('Intensity folders considered for extracted rates evolution:\ti%s until i%s\n' % (str(self.i_start),str(self.i_end)))
+        self.rates_logfile.write('Time steps considered:\t%s until %s\n' %(str(self.t_start),str(self.t_end)))
+
+        # Initialise parameters for f-scan weighted rates
+
+
+        # Loop over states and processes
+        rate_processes = ['coll_ion','3body','auger','rad_decay'] # Collisional ionisation, 3-body recombination, auger decay, radiative decay (a-rate)
+        states = ['gs','single_ch','double_ch'] # non-core hole, single core-hole, double core-hole
+
+        ## Replace popstring and rate_idx by inherited function
+        popstring = [" f_180002", " o_170002", " n_160002", " c_150002", " b_140002", " be130002", " li120002", " he110002"]
+        rate_idx = [" 9   12"," 8   12"," 7   12"," 6   10"," 5    8"," 4    6"," 3    4"," 2    2"," 1    1"]
+
+        if ((isinstance(charge_range,np.ndarray)==False) and (len(charge_range)==2)):
+            charge_range = np.linspace(int(charge_range[0]),int(charge_range[1]),int(charge_range[1])-int(charge_range[0])+1)
+
+
+
+
+        for i in range(self.i_start,self.i_end+1):
+            rates_out = np.zeros([int(self.t_end)-int(self.t_start), len(charge_range)]) # time, charge, per i-folder
+            time_out = np.zeros(int(self.t_end)-int(self.t_start))
+            # Extract rates from scfly output
+            for j in range(int(self.t_start),int(self.t_end)-1):
+                rates_in = os.path.join(self.basepath,"i"+str(i),"output")+"/rate.%03d" %(j+1)
+                with open(rates_in) as rateFile:
+                    time_out[j] = rateFile.readline().split()[0]
+                    for line in rateFile:
+                        for k in range(len(charge_range)):
+                            if re.match("i "+str(inputParameters.Z)+" "+rate_idx[k]+" "+rate_idx[k+1], line):
+                                # print line.split()[10] , j, k
+                                rates_out[j,k] = line.split()[10] # hard-coded solution for coll ionisation
+
+            # Write rate file headers
+            output_file = os.path.join(rates_outdirectory,"z_"+state+"_"+rate_process+"_i"+str(i))
+            # Update f-scan weighted rates
+
+            # Write rates out
+            np.savetxt(output_file, np.concatenate((time_out[:,None],rates_out),axis=1), fmt='%1.2e', delimiter='\t', newline='\n', header="%s\t\t%s\n%s\t\t%d%s%d\n%s\t\t%s\n%s\t\t%s\n%s\t%s" %("Material:",inputParameters.material,"Charge range:",int(min(charge_range))," till ", int(max(charge_range)),"Rate process:",rate_process,"State:",state,"Time","\t".join(popstring)))
+
+
+
+
 
 
 
