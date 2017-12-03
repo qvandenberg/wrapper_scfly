@@ -35,5 +35,6 @@ input_parameters = loadInput(sys.argv[1])
 # spec.broaden('TOTAL', 200, 'GAUSS') # (vector of folders, width [ev], lineshape)
 
 ## Temperature-density conditions
-conditions = extract(input_parameters)
-conditions.temperature_density(input_parameters)
+extract = extract(input_parameters)
+# extract.temperature_density(input_parameters)
+extract.rates(input_parameters,[1,3],'gs','coll_ion')
