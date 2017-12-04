@@ -403,6 +403,9 @@ class extract:
             data = np.loadtxt(i_folderpath, skiprows=1)
             trho_out = open(self.basepath+"/processed_data/conditions/trho_i%d.txt" %(i),'w+a')
             trho_out.write("%s\t%s\t%s\t%s\n" %('Time index','Time [s]','Temperature [eV]','Density [/cc]'))
+            for j in range(1,data.shape[0]+1):
+                trho_out.write("%d\t%1.4e\t%1.4f\t%1.4e\n" %(j+1,data[j,1],data[j,2],data[j,3])) # index, time, temperature, density
+            trho_out.close()
 
             if fscan_flag==True:
                 if (i==self.i_start):
@@ -412,45 +415,98 @@ class extract:
                 T_fscan += weights[i-1]*data[:,2]/sum(weights[self.i_start:self.i_end])
                 rho_fscan += weights[i-1]*data[:,3]/sum(weights[self.i_start:self.i_end])
                 # Write out data per i folder
-                for j in range(data.shape[0]):
-                    trho_out.write("%d\t%1.2e\t%1.2f\t%1.2e\n" %(j+1,data[j,1],data[j,2],data[j,3])) # index, time, temperature, density
-                    if (i==self.i_end):
-                        trhofscan_out.write("%d\t%1.2e\t%1.2f\t%1.2e\n" %(int(j+1),data[j,1],T_fscan[j],rho_fscan[j]))
-            trho_out.close()
-                # trhofscan_out.close()
 
+                if (i==self.i_end):
+                    for j in range(1,1+data.shape[0]):
+                        trhofscan_out.write("%d\t%1.4e\t%1.4f\t%1.4e\n" %(int(j+1),data[j,1],T_fscan[j],rho_fscan[j]))
+                trhofscan_out.close()
 
+    def populations(self, inputParameters, charge_range,state): # self, input_parameters, [charge start, charge end], state (gs, sch, dch)
+        if ((isinstance(charge_range,np.ndarray)==False) and (len(charge_range)==2)):
+            charge_range = np.linspace(int(charge_range[0]),int(charge_range[1]),int(charge_range[1])-int(charge_range[0])+1)
 
-    def populations(self, popstring):
         # Set up directory
         if ((not os.path.isdir(self.basepath+"/processed_data/populations")) or (user_yes_no_query("Overwrite /processed_data/populations extracted populations folder?") == True)):
             call(["rm","-r",os.path.join(self.basepath,"processed_data/populations")])
             call(["mkdir",self.basepath+"/processed_data/populations"])
             print "New folder created: %s" %(os.path.join(self.basepath,"processed_data/populations"))
+            print 'Populations extracted on '+datetime.datetime.now().strftime("%Y-%m-%d-%H:%M:%S")+ "\n"
         else:
-            print "Folder already existed to store conditions: %s" %(os.path.join(self.basepath,"processed_data/populations"))
-        self.conditions_logfile = open(self.basepath+"/processed_data/populations/populations.log",'w+a')
-        self.conditions_logfile.write('Intensity folders considered for population evolution:\ti%s until i%s\n' % (str(self.i_start),str(self.i_end)))
-        self.conditions_logfile.write('Time steps considered:\t%s until %s\n' %(str(self.t_start),str(self.t_end)))
+            print "Folder already existed to store populations: %s" %(os.path.join(self.basepath,"processed_data/populations"))
+            exit()
+        self.populations_logfile = open(self.basepath+"/processed_data/populations/populations.log",'w+a')
+        self.populations_logfile.write('Intensity folders considered for population evolution:\ti%s until i%s\n' % (str(self.i_start),str(self.i_end)))
+        self.populations_logfile.write('Time steps considered:\t%s until %s\n' %(str(self.t_start),str(self.t_end)))
 
-# Construct charge and material dependence to build population string
+        # Initialise parameters for f-scan weighted rates
+        if (os.path.isfile(self.basepath+"/processed_data/fscanweights")==False):
+            print "Rates can't be f-scan weighted as weights don't exist. Run spec.fscan first."
+        fscan_flag = ((os.path.isfile(self.basepath+"/processed_data/fscanweights")==True) and (user_yes_no_query("Write out f-scan weighted populations?")==True))
+        if (fscan_flag==True):
+            data = np.loadtxt(self.basepath+"/processed_data/fscanweights", skiprows=1)
+            weights = data[:,2]
+            pop_fscan = np.zeros([int(self.t_end)-int(self.t_start)+1, len(charge_range)]) # time, charge, per i-folder
+
+            popfscan_file = open(os.path.join(self.basepath,"processed_data/populations", "z"+str(inputParameters.Z)+"_"+"_fscan"),'w+a')
+            self.populations_logfile.write('\nCalculated averaged rates from f-scan weighted rates.\n')
+            self.populations_logfile.write("f-scan weights used:\n")
+            self.populations_logfile.write('\t'.join(map(str,np.around(weights,5))))
+            self.populations_logfile.write("\n")
+
+        # Construct charge and material dependence to build population string in dedicated function
+        popstring = [" f_180002", " o_170002", " n_160002", " c_150002", " b_140002", " be130002", " li120002", " he110002"]
+        # Loop over states
+        states = ['gs','single_ch','double_ch'] # non-core hole, single core-hole, double core-hole
+
+        for i in range(self.i_start,self.i_end+1):
+            pop_out = np.zeros([int(self.t_end)-int(self.t_start)+1, len(charge_range)]) # time, charge, per i-folder
+            time_out = np.linspace(0.0,inputParameters.Tmax*1e-15,int(self.t_end)-int(self.t_start)+1)
+            inputfile = os.path.join(self.basepath,"i"+str(i),"output",str(inputParameters.Z).zfill(2)+".i"+str(i))
+            pop_outdirectory = os.path.join(self.basepath,"processed_data/populations")
+
+            for k in range(len(charge_range)):
+                popdata = [];
+                with open(inputfile) as popFile:
+                    for line in popFile:
+                        if re.match(popstring[k], line):
+                            popline = line.split()[1:11]
+                            popdata = popdata + popline
+                        # elif re.match(' Time', line):
+                        #     timeline = line.split()[1:11]
+                        #     timedata = timedata + timeline
+
+                pop_out[:,k]=popdata
+
+            # Write out populations
+            output_file = os.path.join(pop_outdirectory,"z"+str(inputParameters.Z)+"_"+state+"_i"+str(i))
+            np.savetxt(output_file, np.concatenate((time_out[:,None],pop_out),axis=1), fmt='%1.4e', delimiter='\t', \
+                newline='\n', header="%s\t\t%s\n%s\t\t%d%s%d\n%s\t\t%s\n%s\t%s" %("Material:",inputParameters.material,\
+                "Charge range:",int(min(charge_range))," till ", int(max(charge_range)),"State:",state,"Time","\t".join(popstring)))
+
+            if (fscan_flag==True):
+                pop_fscan += weights[i-1]*pop_out
+                if (i==self.i_end):
+                    np.savetxt(popfscan_file, np.concatenate((time_out[:,None],pop_fscan),axis=1), fmt='%1.4e', delimiter='\t', newline='\n',\
+                        header="%s\t\t%s\n%s\t\t%d%s%d\n%s\t\t%s\n%s\t%s" %("Material:",inputParameters.material,"Charge range:",int(min(charge_range)),\
+                        " till ", int(max(charge_range)),"State:",state,"Time","\t".join(popstring)))
 
 
-
-        # def rates():
 
 
 
     def rates(self,inputParameters,charge_range,state,rate_process): # self, input_parameters, [charge start, charge end], states element, rate_processes element
         ## Create directory and update log file
+        if ((isinstance(charge_range,np.ndarray)==False) and (len(charge_range)==2)):
+            charge_range = np.linspace(int(charge_range[0]),int(charge_range[1]),int(charge_range[1])-int(charge_range[0])+1)
         rates_outdirectory = os.path.join(self.basepath,"processed_data/rates")
         if ((not os.path.isdir(rates_outdirectory)) or (user_yes_no_query("Overwrite /processed_data/rates extracted rates folder?") == True)):
             call(["rm","-r",rates_outdirectory])
             call(["mkdir",rates_outdirectory])
             print "New folder created: %s" %(rates_outdirectory)
+            print 'Rates extracted on '+datetime.datetime.now().strftime("%Y-%m-%d-%H:%M:%S")+ "\n"
         else:
-            print "Folder already existed to store conditions: %s" %(rates_outdirectory)
-        print 'Rates extracted on '+datetime.datetime.now().strftime("%Y-%m-%d-%H:%M:%S")+ "\n"
+            exit()
+            print "Folder already existed to store rates: %s" %(rates_outdirectory)
         self.rates_logfile = open(os.path.join(rates_outdirectory,"rates.log"),'w+a')
         self.rates_logfile.write('Rates extracted on '+datetime.datetime.now().strftime("%Y-%m-%d-%H:%M:%S")+ "\n")
         self.rates_logfile.write("Drawn from directory %s\n" %(self.basepath))
@@ -458,42 +514,62 @@ class extract:
         self.rates_logfile.write('Time steps considered:\t%s until %s\n' %(str(self.t_start),str(self.t_end)))
 
         # Initialise parameters for f-scan weighted rates
+        if (os.path.isfile(self.basepath+"/processed_data/fscanweights")==False):
+            print "Rates can't be f-scan weighted as weights don't exist. Run spec.fscan first."
+        fscan_flag = ((os.path.isfile(self.basepath+"/processed_data/fscanweights")==True) and (user_yes_no_query("Write out f-scan weighted rates?")==True))
+        if (fscan_flag==True):
+            data = np.loadtxt(self.basepath+"/processed_data/fscanweights", skiprows=1)
+            weights = data[:,2]
+            rates_fscan = np.zeros([int(self.t_end)-int(self.t_start), len(charge_range)]) # time, charge, per i-folder
 
+            ratesfscan_file = open(os.path.join(self.basepath,"processed_data/rates", "z"+str(inputParameters.Z)+"_"+rate_process+"_fscan"),'w+a')
+            self.rates_logfile.write('\nCalculated averaged rates from f-scan weighted rates.\n')
+            self.rates_logfile.write("f-scan weights used:\n")
+            self.rates_logfile.write('\t'.join(map(str,np.around(weights,5))))
+            self.rates_logfile.write("\n")
 
         # Loop over states and processes
-        rate_processes = ['coll_ion','3body','auger','rad_decay'] # Collisional ionisation, 3-body recombination, auger decay, radiative decay (a-rate)
+        rate_processes = ['coll_ion','3body','auger'] # Collisional ionisation, 3-body recombination, auger decay
         states = ['gs','single_ch','double_ch'] # non-core hole, single core-hole, double core-hole
-
-        ## Replace popstring and rate_idx by inherited function
+        ## Replace popstring and rate_idx by inherited function in 'extract' class
         popstring = [" f_180002", " o_170002", " n_160002", " c_150002", " b_140002", " be130002", " li120002", " he110002"]
         rate_idx = [" 9   12"," 8   12"," 7   12"," 6   10"," 5    8"," 4    6"," 3    4"," 2    2"," 1    1"]
 
-        if ((isinstance(charge_range,np.ndarray)==False) and (len(charge_range)==2)):
-            charge_range = np.linspace(int(charge_range[0]),int(charge_range[1]),int(charge_range[1])-int(charge_range[0])+1)
-
-
-
+        rate_idx_infile = 0
+        if rate_process is rate_processes[0]:
+            rate_idx_infile = 10
+        elif  rate_process is rate_processes[1]:
+            rate_idx_infile = 11
+        elif rate_idx_infile is rate_processes[2]:
+            rate_idx_infile = 9
+        else:
+            print "Rate process is not supported yet. Choose between \'coll_ion\', \'3body\' and \'auger\'."
 
         for i in range(self.i_start,self.i_end+1):
             rates_out = np.zeros([int(self.t_end)-int(self.t_start), len(charge_range)]) # time, charge, per i-folder
             time_out = np.zeros(int(self.t_end)-int(self.t_start))
             # Extract rates from scfly output
-            for j in range(int(self.t_start),int(self.t_end)-1):
-                rates_in = os.path.join(self.basepath,"i"+str(i),"output")+"/rate.%03d" %(j+1)
+            for j in range(int(self.t_start)+1,int(self.t_end)+1):
+                rates_in = os.path.join(self.basepath,"i"+str(i),"output")+"/rate.%03d" %(j)
                 with open(rates_in) as rateFile:
-                    time_out[j] = rateFile.readline().split()[0]
+                    time_out[j-1-int(self.t_start)] = rateFile.readline().split()[0]
                     for line in rateFile:
                         for k in range(len(charge_range)):
-                            if re.match("i "+str(inputParameters.Z)+" "+rate_idx[k]+" "+rate_idx[k+1], line):
-                                # print line.split()[10] , j, k
-                                rates_out[j,k] = line.split()[10] # hard-coded solution for coll ionisation
+                            if re.match("i "+str(inputParameters.Z).zfill(2)+" "+rate_idx[k]+" "+rate_idx[k+1], line):
+                                rates_out[j-1-int(self.t_start),k] = line.split()[rate_idx_infile]
+            # Write rates to file
+            output_file = os.path.join(rates_outdirectory,"z"+str(inputParameters.Z)+"_"+rate_process+"_i"+str(i))
+            np.savetxt(output_file, np.concatenate((time_out[:,None],rates_out),axis=1), fmt='%1.4e', delimiter='\t', newline='\n',\
+                header="%s\t\t%s\n%s\t\t%d%s%d\n%s\t\t%s\n%s\t\t%s\n%s\t%s" %("Material:",inputParameters.material,"Charge range:",int(min(charge_range)),\
+                " till ", int(max(charge_range)),"Rate process:",rate_process,"State:",state,"Time","\t".join(popstring)))
+            # Compute f-scan weighted rates
+            if (fscan_flag==True):
+                rates_fscan += weights[i-1]*rates_out
+                if (i == self.i_end):
+                    np.savetxt(ratesfscan_file, np.concatenate((time_out[:,None],rates_fscan),axis=1), fmt='%1.4e', delimiter='\t', newline='\n',\
+                        header="%s\t\t%s\n%s\t\t%d%s%d\n%s\t\t%s\n%s\t\t%s\n%s\t%s" %("Material:",inputParameters.material,"Charge range:",int(min(charge_range)),\
+                        " till ", int(max(charge_range)),"Rate process:",rate_process,"State:",state,"Time","\t".join(popstring)))
 
-            # Write rate file headers
-            output_file = os.path.join(rates_outdirectory,"z_"+state+"_"+rate_process+"_i"+str(i))
-            # Update f-scan weighted rates
-
-            # Write rates out
-            np.savetxt(output_file, np.concatenate((time_out[:,None],rates_out),axis=1), fmt='%1.2e', delimiter='\t', newline='\n', header="%s\t\t%s\n%s\t\t%d%s%d\n%s\t\t%s\n%s\t\t%s\n%s\t%s" %("Material:",inputParameters.material,"Charge range:",int(min(charge_range))," till ", int(max(charge_range)),"Rate process:",rate_process,"State:",state,"Time","\t".join(popstring)))
 
 
 
