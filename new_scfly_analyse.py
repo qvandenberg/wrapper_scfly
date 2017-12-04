@@ -37,5 +37,6 @@ input_parameters = loadInput(sys.argv[1])
 ## Extract: temperature-density conditions, population, rates
 extract = extract(input_parameters)
 # extract.temperature_density(input_parameters)
-extract.populations(input_parameters,[1,3],'gs')
-extract.rates(input_parameters,[1,3],'gs','coll_ion')
+# extract.populations(input_parameters,[1,3],'gs')
+# extract.rates(input_parameters,[1,3],'gs','coll_ion')
+extract.superconfiguration(input_parameters,[1,3],'gs')

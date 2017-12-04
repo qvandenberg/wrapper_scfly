@@ -374,6 +374,28 @@ class extract:
         if (t_end == None):
             self.t_end = inputParameters.size_timegrid
 
+    def superconfiguration(self,inputParameters,charge_range,state):
+        # Return superconfiguration strings from atomic input for rate and population extraction
+        if ((isinstance(charge_range,np.ndarray)==False) and (len(charge_range)==2)):
+            charge_range = np.linspace(int(charge_range[0]),int(charge_range[1]),int(charge_range[1])-int(charge_range[0])+1)
+        # Determine configuration
+
+        num_electrons = np.full(charge_range.shape, inputParameters.Z, dtype=int) - charge_range #array of num electrons
+        states = ['gs','single_ch','double_ch'] # non-core hole, single core-hole, double core-hole
+        if state == states[0]:
+            K_shell = 2
+        elif state == states[1]:
+            K_shell = 1
+        elif state == states[2]:
+            K_shell = 0
+        else:
+            print "State is not supported. Choose from \'gs\',\'single_ch\',\'double_ch\'."
+
+            L_shell = max(num_electrons) - K_shell-valence
+            if L_shell > 8:
+                print "Material not supported yet. Configurations can only be made for num_electrons =< 10."
+                return
+            print "K L: ", K_shell, L_shell
 
 
     def temperature_density(self,inputParameterse):
@@ -384,6 +406,7 @@ class extract:
             print "New folder created: %s" %(os.path.join(self.basepath,"processed_data/conditions"))
         else:
             print "Folder already existed to store conditions: %s" %(os.path.join(self.basepath,"processed_data/conditions"))
+            return
         self.conditions_logfile = open(self.basepath+"/processed_data/conditions/conditions.log",'w+a')
         self.conditions_logfile.write('Intensity folders considered for temperature-density evolution:\ti%s until i%s\n' % (str(self.i_start),str(self.i_end)))
         self.conditions_logfile.write('Time steps considered:\t%s until %s\n' %(str(self.t_start),str(self.t_end)))
@@ -433,14 +456,15 @@ class extract:
             print 'Populations extracted on '+datetime.datetime.now().strftime("%Y-%m-%d-%H:%M:%S")+ "\n"
         else:
             print "Folder already existed to store populations: %s" %(os.path.join(self.basepath,"processed_data/populations"))
+            return
             exit()
         self.populations_logfile = open(self.basepath+"/processed_data/populations/populations.log",'w+a')
         self.populations_logfile.write('Intensity folders considered for population evolution:\ti%s until i%s\n' % (str(self.i_start),str(self.i_end)))
         self.populations_logfile.write('Time steps considered:\t%s until %s\n' %(str(self.t_start),str(self.t_end)))
 
-        # Initialise parameters for f-scan weighted rates
+        # Initialise parameters for f-scan weighted populations
         if (os.path.isfile(self.basepath+"/processed_data/fscanweights")==False):
-            print "Rates can't be f-scan weighted as weights don't exist. Run spec.fscan first."
+            print "Populations can't be f-scan weighted as weights don't exist. Run spec.fscan first."
         fscan_flag = ((os.path.isfile(self.basepath+"/processed_data/fscanweights")==True) and (user_yes_no_query("Write out f-scan weighted populations?")==True))
         if (fscan_flag==True):
             data = np.loadtxt(self.basepath+"/processed_data/fscanweights", skiprows=1)
@@ -448,7 +472,7 @@ class extract:
             pop_fscan = np.zeros([int(self.t_end)-int(self.t_start)+1, len(charge_range)]) # time, charge, per i-folder
 
             popfscan_file = open(os.path.join(self.basepath,"processed_data/populations", "z"+str(inputParameters.Z)+"_"+"_fscan"),'w+a')
-            self.populations_logfile.write('\nCalculated averaged rates from f-scan weighted rates.\n')
+            self.populations_logfile.write('\nCalculated averaged populations from f-scan weighing.\n')
             self.populations_logfile.write("f-scan weights used:\n")
             self.populations_logfile.write('\t'.join(map(str,np.around(weights,5))))
             self.populations_logfile.write("\n")
@@ -495,6 +519,7 @@ class extract:
 
 
     def rates(self,inputParameters,charge_range,state,rate_process): # self, input_parameters, [charge start, charge end], states element, rate_processes element
+        np.set_printoptions(precision=4)
         ## Create directory and update log file
         if ((isinstance(charge_range,np.ndarray)==False) and (len(charge_range)==2)):
             charge_range = np.linspace(int(charge_range[0]),int(charge_range[1]),int(charge_range[1])-int(charge_range[0])+1)
@@ -505,8 +530,8 @@ class extract:
             print "New folder created: %s" %(rates_outdirectory)
             print 'Rates extracted on '+datetime.datetime.now().strftime("%Y-%m-%d-%H:%M:%S")+ "\n"
         else:
-            exit()
             print "Folder already existed to store rates: %s" %(rates_outdirectory)
+            return
         self.rates_logfile = open(os.path.join(rates_outdirectory,"rates.log"),'w+a')
         self.rates_logfile.write('Rates extracted on '+datetime.datetime.now().strftime("%Y-%m-%d-%H:%M:%S")+ "\n")
         self.rates_logfile.write("Drawn from directory %s\n" %(self.basepath))
