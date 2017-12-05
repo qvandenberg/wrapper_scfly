@@ -379,7 +379,7 @@ class extract:
         if ((isinstance(charge_range,np.ndarray)==False) and (len(charge_range)==2)):
             charge_range = np.linspace(int(charge_range[0]),int(charge_range[1]),int(charge_range[1])-int(charge_range[0])+1)
         # Determine configuration
-
+        atomic_data_path = os.path.join('/usr/local/lib/atom/','atomic.inp.'+str(inputParameters.Z).zfill(2)
         num_electrons = np.full(charge_range.shape, inputParameters.Z, dtype=int) - charge_range #array of num electrons
         states = ['gs','single_ch','double_ch'] # non-core hole, single core-hole, double core-hole
         if state == states[0]:
