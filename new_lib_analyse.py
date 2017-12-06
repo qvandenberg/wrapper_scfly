@@ -211,7 +211,7 @@ class timeIntSpec:
             # plt.show()
 
     def fscan(self, supergauss_parameters, i_start = None, i_end=None):
-# generalise to do the same for temperature, density, population
+        # generalise to do the same for temperature, density, population
         if i_start == None:
             i_start = self.i_start
         if i_end == None:
@@ -275,11 +275,13 @@ class timeIntSpec:
     def broaden(self, i_folders, sigma, line_shape):
         # Somehow this results in negative spectra. Fix first before applying.
         print ("Fix broaden/smoothen bug first before using further.")
+        if (i_folders[-1]-i_folders[0]>1 and len(i_folders==2)):
+            i_folders=np.linspace(i_folders[0],i_folders[1],i_folders[-1]-i_folders[0]+1, dtype = 'int')
+
         if (isinstance(i_folders,(list, tuple, np.ndarray))==True):
             for i in i_folders:
-                # print 'folders', i
                 # Save copy of original spectrum and update log file
-                if not os.path.exists(self.basepath+"/processed_data/spectra/oldcopies"):
+                if not os.path.isdir(self.basepath+"/processed_data/spectra/oldcopies"):
                     print ('Created directory for old copies of spectra')
                     call(["mkdir",self.basepath+"/processed_data/spectra/oldcopies"])
                 # print 'line 179 ',self.basepath+"/processed_data/spectra/oldcopies/time-integrated_i"+str(int(i))+'_'+datetime.datetime.now().strftime("%Y-%m-%d-%H:%M:%S").replace(' ','_')
@@ -352,7 +354,7 @@ class timeIntSpec:
             print ("Either operate on a range of input directories, or the total f-scan weighted spectrum. Check input arguments.")
 
 class extract:
-    'Extract populations, temperature, density'
+    'Extract populations, temperature, density, rates'
 
     def __init__(self,inputParameters, i_start=None,i_end=None,t_start=None,t_end=None):
         self.basepath = inputParameters.basepath
@@ -383,8 +385,8 @@ class extract:
         if (max(charge_range)==Z):
             print ("Maximum charge range must be smaller than Z.")
             return
-        if ((isinstance(charge_range,np.ndarray)==False) and (len(charge_range)==2)):
-            charge_range = np.linspace((charge_range[0]),(charge_range[1]),(charge_range[1])-(charge_range[0])+1, dtype= 'int16')
+        if (charge_range[-1]-charge_range[0]>1 and len(charge_range)==2):
+            charge_range = np.linspace((charge_range[0]),(charge_range[1])+1,(charge_range[1])-(charge_range[0])+2, dtype= 'int')
         # Determine configuration
         atomic_data_file = os.path.join('/usr/local/lib/atom/','atomic.inp.'+str(Z).zfill(2))
         if (os.path.isfile(atomic_data_file)==False):
@@ -399,8 +401,7 @@ class extract:
         except KeyError:
             print ("Element isn't added to table yet. Update periodic table stored in \'superconfiguration\' function.")
             return
-
-        num_electrons = np.full(charge_range.shape, Z, dtype=int) - charge_range #array of num electrons
+        num_electrons = np.full(charge_range.shape, Z, dtype='int') - charge_range #array of num electrons
         states = ['gs','single_ch','double_ch'] # non-core hole, single core-hole, double core-hole
         if state == states[0]:
             K_shell = 2
@@ -421,15 +422,14 @@ class extract:
             for line in atomfile:
                 for i, config in enumerate(superconfigs):
                     if re.search(config,line):
-                        superconfigs[i] = line.split()[3]
+                        superconfigs[i] = ' '+line.split()[3]
                         indices.append(line.split()[0].rjust(2)+'   '+line.split()[1].rjust(2))
                         # print (line)
-        print(superconfigs, indices)
+        del superconfigs[-1]
         configobject["configs"] = superconfigs
         configobject["indices"] = indices
 
         return configobject
-
 
     def temperature_density(self,inputParameterse):
         # Set up directory
@@ -478,8 +478,8 @@ class extract:
                     trhofscan_out.close()
 
     def populations(self, inputParameters, charge_range,state): # self, input_parameters, [charge start, charge end], state (gs, sch, dch)
-        if ((isinstance(charge_range,np.ndarray)==False) and (len(charge_range)==2)):
-            charge_range = np.linspace(int(charge_range[0]),int(charge_range[1]),int(charge_range[1])-int(charge_range[0])+1)
+        if (charge_range[-1]-charge_range[0]>1 and len(charge_range)==2):
+            charge_range = np.linspace((charge_range[0]),(charge_range[1]),(charge_range[1])-(charge_range[0])+1, dtype= 'int')
 
         # Set up directory
         if ((not os.path.isdir(self.basepath+"/processed_data/populations")) or (user_yes_no_query("Overwrite /processed_data/populations extracted populations folder?") == True)):
@@ -522,7 +522,7 @@ class extract:
             inputfile = os.path.join(self.basepath,"i"+str(i),"output",str(inputParameters.Z).zfill(2)+".i"+str(i))
             pop_outdirectory = os.path.join(self.basepath,"processed_data/populations")
 
-            for k in range(len(charge_range)):
+            for k in range(len(popstring)):
                 popdata = [];
                 with open(inputfile) as popFile:
                     for line in popFile:
@@ -532,7 +532,6 @@ class extract:
                         # elif re.match(' Time', line):
                         #     timeline = line.split()[1:11]
                         #     timedata = timedata + timeline
-
                 pop_out[:,k]=popdata
 
             # Write out populations
@@ -548,15 +547,11 @@ class extract:
                         header="%s\t\t%s\n%s\t\t%d%s%d\n%s\t\t%s\n%s\t%s" %("Material:",inputParameters.material,"Charge range:",int(min(charge_range)),\
                         " till ", int(max(charge_range)),"State:",state,"Time","\t".join(popstring)))
 
-
-
-
-
     def rates(self,inputParameters,charge_range,state,rate_process): # self, input_parameters, [charge start, charge end], states element, rate_processes element
         np.set_printoptions(precision=4)
         ## Create directory and update log file
-        if ((isinstance(charge_range,np.ndarray)==False) and (len(charge_range)==2)):
-            charge_range = np.linspace(int(charge_range[0]),int(charge_range[1]),int(charge_range[1])-int(charge_range[0])+1)
+        if (charge_range[-1]-charge_range[0]>1 and len(charge_range)==2):
+            charge_range = np.linspace((charge_range[0]),(charge_range[1]),(charge_range[1])-(charge_range[0])+1, dtype= 'int')
         rates_outdirectory = os.path.join(self.basepath,"processed_data/rates")
         if ((not os.path.isdir(rates_outdirectory)) or (user_yes_no_query("Overwrite /processed_data/rates extracted rates folder?") == True)):
             call(["rm","-r",rates_outdirectory])
@@ -593,9 +588,8 @@ class extract:
         ## Replace popstring and rate_idx by inherited function in 'extract' class
         popstring = self.superconfiguration(inputParameters.Z,charge_range,state)["configs"]
         rate_idx = self.superconfiguration(inputParameters.Z,charge_range,state)["indices"]
-
         # popstring = [" f_180002", " o_170002", " n_160002", " c_150002", " b_140002", " be130002", " li120002", " he110002"]
-        rate_idx = [" 9   12"," 8   12"," 7   12"," 6   10"," 5    8"," 4    6"," 3    4"," 2    2"," 1    1"]
+        # rate_idx = [" 9   12"," 8   12"," 7   12"," 6   10"," 5    8"," 4    6"," 3    4"," 2    2"," 1    1"]
 
         rate_idx_infile = 0
         if rate_process is rate_processes[0]:
@@ -604,6 +598,7 @@ class extract:
             rate_idx_infile = 11
         elif rate_idx_infile is rate_processes[2]:
             rate_idx_infile = 9
+            print("Warning: Make sure indices for Auger decay are properly implemented.")
         else:
             print ("Rate process is not supported yet. Choose between \'coll_ion\', \'3body\' and \'auger\'.")
 
@@ -616,7 +611,7 @@ class extract:
                 with open(rates_in) as rateFile:
                     time_out[j-1-int(self.t_start)] = rateFile.readline().split()[0]
                     for line in rateFile:
-                        for k in range(len(charge_range)):
+                        for k in range(len(popstring)):
                             if re.match("i "+str(inputParameters.Z).zfill(2)+" "+rate_idx[k]+" "+rate_idx[k+1], line):
                                 rates_out[j-1-int(self.t_start),k] = line.split()[rate_idx_infile]
             # Write rates to file
