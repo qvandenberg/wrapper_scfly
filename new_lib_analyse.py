@@ -374,8 +374,11 @@ class extract:
             self.t_end = inputParameters.size_timegrid
 
     def superconfiguration(self,Z,charge_range,state):
-        # Return superconfiguration strings from atomic input for rate and population extraction
+        # Return superconfiguration object {"configs": [....], "indices":[...]} from atomic input for use in rate and population extraction
+
+        configobject = {}
         superconfigs = []
+        indices = []
         # Compatibility checks
         if (max(charge_range)==Z):
             print ("Maximum charge range must be smaller than Z.")
@@ -407,20 +410,25 @@ class extract:
             K_shell = 0
         else:
             print ("State is not supported. Choose from \'gs\',\'single_ch\',\'double_ch\'.")
-        charge = 1
-        print (str(num_electrons[int(charge)]))
-        print (periodic_table[str(num_electrons[int(charge)])])
-        print (str(K_shell))
-        print (str(int(Z)-num_electrons[int(charge)]-(K_shell)))
-
-
-
         if (Z-max(num_electrons) - K_shell > 8):
             print ("Material not supported yet. Configurations can only be made for num_electrons =< 10.")
             return
-        for charge in charge_range:
-            superconfigs.append(periodic_table[str(num_electrons[int(charge)])]+str(int(K_shell))+str(int(Z)-num_electrons[int(charge)]-int(K_shell)))
-        print (superconfigs)
+        # Build superconfiguration strings
+        for i in range(len(charge_range)):
+            superconfigs.append(periodic_table[str(num_electrons[i])]+str(K_shell)+str(num_electrons[i]-K_shell))
+        # Match superconfigs with atomic data strings to get full configuration and indices
+        with open(atomic_data_file,'r') as atomfile:
+            for line in atomfile:
+                for i, config in enumerate(superconfigs):
+                    if re.search(config,line):
+                        superconfigs[i] = line.split()[3]
+                        indices.append(line.split()[0].rjust(2)+'   '+line.split()[1].rjust(2))
+                        # print (line)
+        print(superconfigs, indices)
+        configobject["configs"] = superconfigs
+        configobject["indices"] = indices
+
+        return configobject
 
 
     def temperature_density(self,inputParameterse):
@@ -503,7 +511,8 @@ class extract:
             self.populations_logfile.write("\n")
 
         # Construct charge and material dependence to build population string in dedicated function
-        popstring = [" f_180002", " o_170002", " n_160002", " c_150002", " b_140002", " be130002", " li120002", " he110002"]
+        popstring = self.superconfiguration(inputParameters.Z,charge_range,state)["configs"]
+        # popstring = [" f_180002", " o_170002", " n_160002", " c_150002", " b_140002", " be130002", " li120002", " he110002"]
         # Loop over states
         states = ['gs','single_ch','double_ch'] # non-core hole, single core-hole, double core-hole
 
@@ -582,7 +591,10 @@ class extract:
         rate_processes = ['coll_ion','3body','auger'] # Collisional ionisation, 3-body recombination, auger decay
         states = ['gs','single_ch','double_ch'] # non-core hole, single core-hole, double core-hole
         ## Replace popstring and rate_idx by inherited function in 'extract' class
-        popstring = [" f_180002", " o_170002", " n_160002", " c_150002", " b_140002", " be130002", " li120002", " he110002"]
+        popstring = self.superconfiguration(inputParameters.Z,charge_range,state)["configs"]
+        rate_idx = self.superconfiguration(inputParameters.Z,charge_range,state)["indices"]
+
+        # popstring = [" f_180002", " o_170002", " n_160002", " c_150002", " b_140002", " be130002", " li120002", " he110002"]
         rate_idx = [" 9   12"," 8   12"," 7   12"," 6   10"," 5    8"," 4    6"," 3    4"," 2    2"," 1    1"]
 
         rate_idx_infile = 0
