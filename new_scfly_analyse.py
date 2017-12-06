@@ -16,7 +16,7 @@ from subprocess import call
 
 ## Check number of input arguments. Should be only 1.
 if len(sys.argv) != 2:
-    print 'Number of arguments is ', len(sys.argv)-1, '; one required!.'
+    print( 'Number of arguments is ', len(sys.argv)-1, '; one required!.')
 
 # Build folders for processed data
 init = initFolderStructure(sys.argv[1])
@@ -36,7 +36,7 @@ input_parameters = loadInput(sys.argv[1])
 
 ## Extract: temperature-density conditions, population, rates
 extract = extract(input_parameters)
-# extract.temperature_density(input_parameters)
-# extract.populations(input_parameters,[1,3],'gs')
-# extract.rates(input_parameters,[1,3],'gs','coll_ion')
-extract.superconfiguration(input_parameters,[1,3],'gs')
+extract.temperature_density(input_parameters)
+extract.populations(input_parameters,[1,3],'gs')
+extract.rates(input_parameters,[1,3],'gs','coll_ion')
+extract.superconfiguration(input_parameters.Z,[1,3],'gs')
