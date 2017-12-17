@@ -1,5 +1,4 @@
 #!/usr/bin/env python3.6
-
 #__________________________________________________________________________
 #
 #   Library of classes to support scfly_analyse.py. Contains several classes/functions:
@@ -12,7 +11,6 @@
 #
 #
 #__________________________________________________________________________
-
 
 import sys, os, getopt
 import re
@@ -45,7 +43,7 @@ class initFolderStructure:
         print (os.path.realpath(filepath)+"/processed_data")
         print ((os.path.isdir(os.path.realpath(filepath)+"/processed_data")), os.path.dirname(os.path.realpath(filepath))+"/processed_data")
 
-        if (not os.path.isdir(os.path.realpath(filepath)+"/processed_data")):
+        if (os.path.isdir(os.path.join(os.path.realpath(filepath),"processed_data"))==False):
             print ("Newly created /processed_data directory")
             call(["mkdir",os.path.realpath(filepath)+"/processed_data"])
         elif (user_yes_no_query("Overwrite old /processed_data folder?")==True):
@@ -136,7 +134,6 @@ class loadInput:
               else:
                   print ("Add material to input routine to determine self.Z")
 
-
     def displayCount(self):
         print ("Total amount of input parameters: %d" % loadInput.fileCount)
         return
@@ -197,6 +194,7 @@ class spectra:
 
                 # Write out intensities to file
                 file_specout = open(os.path.join(self.basepath,"processed_data/spectra","time-integrated_i"+str(i)),'w')
+
                 file_specout.write("%s\t%s\n" %('E [eV]','Intensity'))
                 for k in range(len(self.freq_grid)):
                     file_specout.write("%1.2f %1.4e\n" %(self.freq_grid[k],intensity[k]))
@@ -383,6 +381,11 @@ class extract:
         configobject = {}
         superconfigs = []
         indices = []
+        a=[]
+        print ("line387", (charge_range[0]),(charge_range[-1])+1,(charge_range[-1])-(charge_range[0])+2)
+        print(type(charge_range[0]),type(charge_range[-1]))
+        print(np.linspace(3,11,9,dtype=int))
+        print(np.linspace(charge_range[0],charge_range[-1]+1,charge_range[-1]-charge_range[0]+2,dtype=int))
         # Compatibility checks
         if (max(charge_range)==Z):
             print ("Maximum charge range must be smaller than Z.")
@@ -422,6 +425,7 @@ class extract:
         # Build superconfiguration strings
         for i in range(len(charge_range)):
             superconfigs.append(periodic_table[str(num_electrons[i])]+str(K_shell)+str(num_electrons[i]-K_shell))
+        print ("line417", superconfigs)
         # Match superconfigs with atomic data strings to get full configuration and indices
         with open(atomic_data_file,'r') as atomfile:
             for line in atomfile:
@@ -467,7 +471,6 @@ class extract:
             for j in range(data.shape[0]):
                 trho_out.write("%d\t%1.4e\t%1.4f\t%1.4e\n" %(j+1,data[j,1],data[j,2],data[j,3])) # index, time, temperature, density
             trho_out.close()
-
             if fscan_flag==True:
                 if (i==self.i_start):
                     T_fscan = np.zeros(data.shape[0])
@@ -503,7 +506,9 @@ class extract:
         # Initialise parameters for f-scan weighted populations
         if (os.path.isfile(os.path.join(self.basepath,"processed_data/fscanweights"))==False):
             print ("Populations can't be f-scan weighted as weights don't exist. Run spec.fscan first.")
-        fscan_flag = ((os.path.isfile(self.basepath+"/processed_data/fscanweights")==True) and (user_yes_no_query("Write out f-scan weighted populations?")==True))
+        fscan_flag = ((os.path.isfile(self.basepath+"/processed_data/fscanweights")==True) and\
+            ((not os.path.isdir(os.path.join(self.basepath,"processed_data/populations", "z"+str(inputParameters.Z)+"_"+"_fscan")))\
+             or (user_yes_no_query("Write out f-scan weighted populations?")==True)))
         if (fscan_flag==True):
             data = np.loadtxt(os.path.join(self.basepath,"processed_data/fscanweights"), skiprows=1)
             weights = data[:,2]
@@ -517,12 +522,13 @@ class extract:
 
         # Construct charge and material dependence to build population string in dedicated function
         popstring = self.superconfiguration(inputParameters.Z,charge_range,state)["configs"]
+        print (popstring)
         # popstring = [" f_180002", " o_170002", " n_160002", " c_150002", " b_140002", " be130002", " li120002", " he110002"]
 
         # Loop over states
         states = ['gs','single_ch','double_ch'] # non-core hole, single core-hole, double core-hole
         for i in range(self.i_start,self.i_end+1):
-            pop_out = np.zeros([int(self.t_end)-int(self.t_start)+1, len(charge_range)]) # time, charge, per i-folder
+            pop_out = np.zeros([int(self.t_end)-int(self.t_start)+1, len(popstring)]) # time, charge, per i-folder
             time_out = np.linspace(0.0,inputParameters.Tmax*1e-15,int(self.t_end)-int(self.t_start)+1)
             inputfile = os.path.join(self.basepath,"i"+str(i),"output",str(inputParameters.Z).zfill(2)+".i"+str(i))
             pop_outdirectory = os.path.join(self.basepath,"processed_data/populations")
@@ -559,6 +565,7 @@ class extract:
         if (charge_range[-1]-charge_range[0]>1 and len(charge_range)==2):
             charge_range = np.linspace((charge_range[0]),(charge_range[1]),(charge_range[1])-(charge_range[0])+1, dtype= 'int')
         rates_outdirectory = os.path.join(self.basepath,"processed_data/rates")
+
         if ((not os.path.isdir(rates_outdirectory)) or (user_yes_no_query("Overwrite /processed_data/rates extracted rates folder?") == True)):
             call(["rm","-r",rates_outdirectory])
             call(["mkdir",rates_outdirectory])
@@ -576,7 +583,9 @@ class extract:
         # Initialise parameters for f-scan weighted rates
         if (os.path.isfile(self.basepath+"/processed_data/fscanweights")==False):
             print ("Rates can't be f-scan weighted as weights don't exist. Run spec.fscan first.")
-        fscan_flag = ((os.path.isfile(self.basepath+"/processed_data/fscanweights")==True) and (user_yes_no_query("Write out f-scan weighted rates?")==True))
+        fscan_flag = ((os.path.isfile(self.basepath+"/processed_data/fscanweights")==True) and\
+            ((not os.path.isdir(os.path.join(self.basepath,"processed_data/rates", "z"+str(inputParameters.Z)+"_"+rate_process+"_fscan")))\
+             or (user_yes_no_query("Write out f-scan weighted populations?")==True)))
         if (fscan_flag==True):
             data = np.loadtxt(self.basepath+"/processed_data/fscanweights", skiprows=1)
             weights = data[:,2]
@@ -608,17 +617,19 @@ class extract:
             print ("Rate process is not supported yet. Choose between \'coll_ion\', \'3body\' and \'auger\'.")
 
         for i in range(self.i_start,self.i_end+1):
-            rates_out = np.zeros([int(self.t_end)-int(self.t_start), len(charge_range)]) # time, charge, per i-folder
+            rates_out = np.zeros([int(self.t_end)-int(self.t_start), len(popstring)]) # time, charge, per i-folder
             time_out = np.zeros(int(self.t_end)-int(self.t_start))
             # Extract rates from scfly output
             for j in range(int(self.t_start)+1,int(self.t_end)+1):
                 rates_in = os.path.join(self.basepath,"i"+str(i),"output")+"/rate.%03d" %(j)
+                # print (rates_in, rate_idx_infile) # correct file is being opened
                 with open(rates_in) as rateFile:
                     time_out[j-1-int(self.t_start)] = rateFile.readline().split()[0]
                     for line in rateFile:
-                        for k in range(len(popstring)):
+                        for k, pop in enumerate(popstring):
                             if re.match("i "+str(inputParameters.Z).zfill(2)+" "+rate_idx[k]+" "+rate_idx[k+1], line):
                                 rates_out[j-1-int(self.t_start),k] = line.split()[rate_idx_infile]
+                                # print("Extracted rate: ",line, line.split()[rate_idx_infile])
             # Write rates to file
             output_file = os.path.join(rates_outdirectory,"z"+str(inputParameters.Z)+"_"+rate_process+"_i"+str(i))
             np.savetxt(output_file, np.concatenate((time_out[:,None],rates_out),axis=1), fmt='%1.4e', delimiter='\t', newline='\n',\
@@ -626,6 +637,7 @@ class extract:
                 " till ", int(max(charge_range)),"Rate process:",rate_process,"State:",state,"Time","\t".join(popstring)))
             # Compute f-scan weighted rates
             if (fscan_flag==True):
+                print(rates_fscan.shape, weights.shape, rates_out.shape)
                 rates_fscan += weights[i-1]*rates_out
                 if (i == self.i_end):
                     np.savetxt(ratesfscan_file, np.concatenate((time_out[:,None],rates_fscan),axis=1), fmt='%1.4e', delimiter='\t', newline='\n',\
