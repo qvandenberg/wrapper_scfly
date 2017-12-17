@@ -389,10 +389,13 @@ class extract:
             return
         if (charge_range[-1]-charge_range[0]>1 and len(charge_range)==2):
             charge_range = np.linspace((charge_range[0]),(charge_range[1])+1,(charge_range[1])-(charge_range[0])+2, dtype= 'int')
+        else:
+            charge_range = np.linspace(charge_range[0],charge_range[-1]+1,len(charge_range)+1,dtype=int)
+
         # Determine configuration
         atomic_data_file = os.path.join('/usr/local/lib/atom/','atomic.inp.'+str(Z).zfill(2))
         if (os.path.isfile(atomic_data_file)==False):
-            print ("Atomic data file not found. Add atomic data file to folder \\usr\\local\\lib\\atom.")
+            print ("Atomic data file (atomic.inp.xx) not found. Add atomic data file to folder \\usr\\local\\lib\\atom.")
             return
         periodic_table = {"1":"h_", "2":"he","3":"li","4":"be","5":"b_","6":"c_","7":"n_","8":"o_","9":"f_",\
             "10":"ne","11": "na", "12":"mg","13":"al","14":"si","15":"p_","16":"s_","17":"cl","18":"ar","19":"k_",\
@@ -426,11 +429,11 @@ class extract:
                     if re.search(config,line):
                         superconfigs[i] = ' '+line.split()[3]
                         indices.append(line.split()[0].rjust(2)+'   '+line.split()[1].rjust(2))
-                        # print (line)
         del superconfigs[-1]
+        indices.reverse() # descend in charge state
+
         configobject["configs"] = superconfigs
         configobject["indices"] = indices
-        # print (superconfigs, indices)
         return configobject
 
     def temperature_density(self,inputParameterse):
@@ -480,10 +483,9 @@ class extract:
                     trhofscan_out.close()
         return
 
-    def populations(self, inputParameters, charge_range,state): # self, input_parameters, [charge start, charge end], state (gs, sch, dch)
+    def populations(self, inputParameters, charge_range, state): # self, input_parameters, [charge start, charge end], state (gs, sch, dch)
         if (charge_range[-1]-charge_range[0]>1 and len(charge_range)==2):
             charge_range = np.linspace((charge_range[0]),(charge_range[1]),(charge_range[1])-(charge_range[0])+1, dtype= 'int')
-
         # Set up directory
         if ((not os.path.isdir(self.basepath+"/processed_data/populations")) or (user_yes_no_query("Overwrite /processed_data/populations extracted populations folder?") == True)):
             call(["rm","-r",os.path.join(self.basepath,"processed_data/populations")])
@@ -516,9 +518,9 @@ class extract:
         # Construct charge and material dependence to build population string in dedicated function
         popstring = self.superconfiguration(inputParameters.Z,charge_range,state)["configs"]
         # popstring = [" f_180002", " o_170002", " n_160002", " c_150002", " b_140002", " be130002", " li120002", " he110002"]
+
         # Loop over states
         states = ['gs','single_ch','double_ch'] # non-core hole, single core-hole, double core-hole
-
         for i in range(self.i_start,self.i_end+1):
             pop_out = np.zeros([int(self.t_end)-int(self.t_start)+1, len(charge_range)]) # time, charge, per i-folder
             time_out = np.linspace(0.0,inputParameters.Tmax*1e-15,int(self.t_end)-int(self.t_start)+1)
@@ -594,7 +596,6 @@ class extract:
         rate_idx = self.superconfiguration(inputParameters.Z,charge_range,state)["indices"]
         # popstring = [" f_180002", " o_170002", " n_160002", " c_150002", " b_140002", " be130002", " li120002", " he110002"]
         # rate_idx = [" 9   12"," 8   12"," 7   12"," 6   10"," 5    8"," 4    6"," 3    4"," 2    2"," 1    1"]
-
         rate_idx_infile = 0
         if rate_process is rate_processes[0]:
             rate_idx_infile = 10
