@@ -139,9 +139,10 @@ class loadInput:
 
     def displayCount(self):
         print ("Total amount of input parameters: %d" % loadInput.fileCount)
+        return
 
-class timeIntSpec:
-    'Routines for time-integration of spectra, f-scan weighing and broadening.'
+class spectra:
+    'Routines for time-integration of spectra, f-scan weighing and smoothening.'
     # If no time boundaries are set the default is to integrate across all time steps
 
     def __init__(self,inputParameters, i_start=None,i_end=None,t_start=None,t_end=None):
@@ -150,8 +151,8 @@ class timeIntSpec:
         # print 'basepath ', self.basepath
         # folder and log file to store results
         if not os.path.isdir(self.basepath+"/processed_data/spectra"):
-            call(["mkdir",self.basepath+"/processed_data/spectra"])
-        self.logfile = open(self.basepath+"/processed_data/spectra/intspec.log",'r+')
+            call(["mkdir",os.path.join(self.basepath,"processed_data/spectra")])
+        self.logfile = open(os.path.join(self.basepath,"processed_data/spectra","intspec.log"),'w')
 
         # Determine time and intensity steps to consider, and frequency grid
         self.freq_grid = inputParameters.HVrange
@@ -195,8 +196,7 @@ class timeIntSpec:
                     intensity += np.interp(self.freq_grid, freqs, intens)
 
                 # Write out intensities to file
-
-                file_specout = open(self.basepath+"/processed_data/spectra/time-integrated_i"+str(i),'r+')
+                file_specout = open(os.path.join(self.basepath,"processed_data/spectra","time-integrated_i"+str(i)),'w')
                 file_specout.write("%s\t%s\n" %('E [eV]','Intensity'))
                 for k in range(len(self.freq_grid)):
                     file_specout.write("%1.2f %1.4e\n" %(self.freq_grid[k],intensity[k]))
@@ -206,6 +206,7 @@ class timeIntSpec:
         else:
             print ("Time-integrated spectra already exist in folder %s." %(self.basepath+"/processed_data/spectra"))
 
+        return
             # Plot for inspection
             # plt.plot(self.freq_grid, intensity)
             # plt.show()
@@ -237,7 +238,7 @@ class timeIntSpec:
         # weigh spectra to form total spectrum
         total_spectrum = np.zeros((len(self.freq_grid),))
         for i in range(len(surface_weights)):
-            datapath = self.basepath+"/processed_data/spectra/time-integrated_i"+str(int(i+1))
+            datapath = os.path.join(self.basepath,"processed_data/spectra","time-integrated_i"+str(int(i+1)))
             data = np.loadtxt(datapath, skiprows=1)
             x = data[:,0] # energy, eV
             y = data[:,1] # intensity
@@ -248,13 +249,13 @@ class timeIntSpec:
             total_spectrum += surface_weights[i]*np.interp(self.freq_grid,x,y)
 
         # Write weights to file
-        file_weights = open(self.basepath+"/processed_data/fscanweights",'r+')
+        file_weights = open(os.path.join(self.basepath,"processed_data","fscanweights"),'w')
         file_weights.write("%s\t%s\t%s\n" %('Index','Intensity','Weight'))
         for k in range(len(surface_weights)):
-            file_weights.write("%d %1.4e %1.3f\n" %(k+1, I_fscan_unnormalised[k], surface_weights[k]))
+            file_weights.write("%d %1.4e %1.4e\n" %(k+1, I_fscan_unnormalised[k], surface_weights[k]))
 
         # Write spectrum to file
-        file_specout = open(self.basepath+"/processed_data/spectra/time-integrated_total",'r+')
+        file_specout = open(os.path.join(self.basepath,"processed_data/spectra","time-integrated_total"),'w')
         file_specout.write("%s\t%s\n" %('E [eV]','Intensity'))
         for k in range(len(self.freq_grid)):
             file_specout.write("%1.2f %1.4e\n" %(self.freq_grid[k],total_spectrum[k]))
@@ -271,6 +272,7 @@ class timeIntSpec:
         ## Plot for inspection
         # plt.plot(self.freq_grid, total_spectrum)
         # plt.show()
+        return
 
     def broaden(self, i_folders, sigma, line_shape):
         # Somehow this results in negative spectra. Fix first before applying.
@@ -284,13 +286,12 @@ class timeIntSpec:
                 if not os.path.isdir(self.basepath+"/processed_data/spectra/oldcopies"):
                     print ('Created directory for old copies of spectra')
                     call(["mkdir",self.basepath+"/processed_data/spectra/oldcopies"])
-                # print 'line 179 ',self.basepath+"/processed_data/spectra/oldcopies/time-integrated_i"+str(int(i))+'_'+datetime.datetime.now().strftime("%Y-%m-%d-%H:%M:%S").replace(' ','_')
                 call("cp "+self.basepath+"/processed_data/spectra/time-integrated_i"+str(int(i)) +' '+self.basepath+"/processed_data/spectra/oldcopies/time-integrated_i"+str(int(i))+'_'+datetime.datetime.now().strftime("%Y-%m-%d-%H:%M:%S").replace(' ','_'),shell=True)
                 self.logfile.write('Broadened i'+str(int(i))+' spectrum by a %s line shape with width: %1.2f \n' %(line_shape, sigma))
                 self.logfile.write('Copy of i'+str(int(i))+' spectrum made with timestamp '+datetime.datetime.now().strftime("%Y-%m-%d-%H:%M:%S")+ "\n" %())
 
                 # Read spectra from file
-                datapath = self.basepath+"/processed_data/spectra/time-integrated_i"+str(int(i))
+                datapath = os.path.join(self.basepath,"processed_data/spectra","time-integrated_i"+str(int(i)))
                 data = np.loadtxt(datapath, skiprows=1)
                 x = data[:,0] # energy, eV
                 y = data[:,1] # intensity
@@ -300,21 +301,22 @@ class timeIntSpec:
                 x_convolve = np.linspace(-L/2,L/2,len(x))
 
                 if line_shape == 'GAUSS':
-                    y_convolve = lambda x: np.exp(-x**2/(2*sigma**2))
+                    y_convolve = lambda x_convolve: np.exp(-x_convolve**2/(2*sigma**2))
                     norm = integrate.quad(y_convolve,-L/2,L/2)[0]
                 else:
                     print ("Currently only supports Gaussian lineshape. Supply argument \'GAUSS\'")
+                    return
                 # Convolve original spectrum with line shape for smoothening
                 y_convolve = np.exp(-x_convolve**2/(2*sigma**2))/norm
                 y_smooth = np.convolve(y, y_convolve, mode='same')
                 y_smooth = y_smooth*np.trapz(x,y)/np.trapz(x,y_smooth)
                 # Write result to file
-                file_specout = open(datapath,'r+')
+                file_specout = open(datapath,'w')
                 file_specout.write("%s\t%s\n" %('E [eV]','Intensity'))
                 for k in range(len(x)):
-                    file_specout.write("%1.2f %1.2f\n" %(x[k],y_smooth[k]))
+                    file_specout.write("%1.2f %1.4e\n" %(x[k],y_smooth[k]))
                 file_specout.close()
-
+                return
         elif (i_folders == 'TOTAL'):
             # Save copy of original spectrum and update log file
             if not os.path.exists(self.basepath+"/processed_data/spectra/oldcopies"):
@@ -336,7 +338,7 @@ class timeIntSpec:
 
             if line_shape == 'GAUSS':
                 self.line_shape = 'GAUSS'
-                y_convolve = lambda x: np.exp(-x**2/(2*sigma**2))
+                y_convolve = lambda x_convolve: np.exp(-x_convolve**2/(2*sigma**2))
                 norm = integrate.quad(y_convolve,-L/2,L/2)[0]
             else:
                 print ("Currently only supports Gaussian lineshape. Supply argument \'GAUSS\'")
@@ -344,14 +346,15 @@ class timeIntSpec:
             y_smooth = np.convolve(y, y_convolve, mode='same')
             y_smooth = y_smooth*np.trapz(x,y)/np.trapz(x,y_smooth)
             # Write result to file
-            file_specout = open(datapath,'r+')
+            file_specout = open(datapath,'w')
             file_specout.write("%s\t%s\n" %('E [eV]','Intensity'))
             for k in range(len(x)):
-                file_specout.write("%1.2f %1.2f\n" %(x[k],y_smooth[k]))
+                file_specout.write("%1.2f %1.4e\n" %(x[k],y_smooth[k]))
             file_specout.close()
-
+            return
         else:
-            print ("Either operate on a range of input directories, or the total f-scan weighted spectrum. Check input arguments.")
+            print ("Either operate on an numpy vector of input directories, or the total f-scan weighted spectrum. Check input arguments.")
+            return
 
 class extract:
     'Extract populations, temperature, density, rates'
@@ -377,7 +380,6 @@ class extract:
 
     def superconfiguration(self,Z,charge_range,state):
         # Return superconfiguration object {"configs": [....], "indices":[...]} from atomic input for use in rate and population extraction
-
         configobject = {}
         superconfigs = []
         indices = []
@@ -428,7 +430,7 @@ class extract:
         del superconfigs[-1]
         configobject["configs"] = superconfigs
         configobject["indices"] = indices
-
+        # print (superconfigs, indices)
         return configobject
 
     def temperature_density(self,inputParameterse):
@@ -476,6 +478,7 @@ class extract:
                     for j in range(data.shape[0]):
                         trhofscan_out.write("%d\t%1.4e\t%1.4f\t%1.4e\n" %(int(j+1),data[j,1],T_fscan[j],rho_fscan[j]))
                     trhofscan_out.close()
+        return
 
     def populations(self, inputParameters, charge_range,state): # self, input_parameters, [charge start, charge end], state (gs, sch, dch)
         if (charge_range[-1]-charge_range[0]>1 and len(charge_range)==2):
@@ -496,11 +499,11 @@ class extract:
         self.populations_logfile.write('Time steps considered:\t%s until %s\n' %(str(self.t_start),str(self.t_end)))
 
         # Initialise parameters for f-scan weighted populations
-        if (os.path.isfile(self.basepath+"/processed_data/fscanweights")==False):
+        if (os.path.isfile(os.path.join(self.basepath,"processed_data/fscanweights"))==False):
             print ("Populations can't be f-scan weighted as weights don't exist. Run spec.fscan first.")
         fscan_flag = ((os.path.isfile(self.basepath+"/processed_data/fscanweights")==True) and (user_yes_no_query("Write out f-scan weighted populations?")==True))
         if (fscan_flag==True):
-            data = np.loadtxt(self.basepath+"/processed_data/fscanweights", skiprows=1)
+            data = np.loadtxt(os.path.join(self.basepath,"processed_data/fscanweights"), skiprows=1)
             weights = data[:,2]
             pop_fscan = np.zeros([int(self.t_end)-int(self.t_start)+1, len(charge_range)]) # time, charge, per i-folder
 
@@ -546,6 +549,7 @@ class extract:
                     np.savetxt(popfscan_file, np.concatenate((time_out[:,None],pop_fscan),axis=1), fmt='%1.4e', delimiter='\t', newline='\n',\
                         header="%s\t\t%s\n%s\t\t%d%s%d\n%s\t\t%s\n%s\t%s" %("Material:",inputParameters.material,"Charge range:",int(min(charge_range)),\
                         " till ", int(max(charge_range)),"State:",state,"Time","\t".join(popstring)))
+        return
 
     def rates(self,inputParameters,charge_range,state,rate_process): # self, input_parameters, [charge start, charge end], states element, rate_processes element
         np.set_printoptions(precision=4)
@@ -626,7 +630,7 @@ class extract:
                     np.savetxt(ratesfscan_file, np.concatenate((time_out[:,None],rates_fscan),axis=1), fmt='%1.4e', delimiter='\t', newline='\n',\
                         header="%s\t\t%s\n%s\t\t%d%s%d\n%s\t\t%s\n%s\t\t%s\n%s\t%s" %("Material:",inputParameters.material,"Charge range:",int(min(charge_range)),\
                         " till ", int(max(charge_range)),"Rate process:",rate_process,"State:",state,"Time","\t".join(popstring)))
-
+        return
 
 
 
