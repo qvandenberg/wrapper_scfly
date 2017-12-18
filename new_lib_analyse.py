@@ -382,11 +382,6 @@ class extract:
         configobject = {}
         superconfigs = []
         indices = []
-        a=[]
-        print ("line387", (charge_range[0]),(charge_range[-1])+1,(charge_range[-1])-(charge_range[0])+2)
-        print(type(charge_range[0]),type(charge_range[-1]))
-        print(np.linspace(3,11,9,dtype=int))
-        print(np.linspace(charge_range[0],charge_range[-1]+1,charge_range[-1]-charge_range[0]+2,dtype=int))
         # Compatibility checks
         if (max(charge_range)==Z):
             print ("Maximum charge range must be smaller than Z.")
