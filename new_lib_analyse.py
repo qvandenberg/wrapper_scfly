@@ -178,7 +178,8 @@ class spectra:
 
     def time_integrate(self, inputParameters): # inputParameters, i_start=None,i_end=None,t_start=None,t_end=None
         # Integrate all intensities independently
-        if (os.path.isdir(self.basepath+"/processed_data/spectra")&(user_yes_no_query("Overwrite old /processed_data/spectra folder?")==True)):
+        if (os.path.isdir(self.basepath+"/processed_data/spectra")\
+          and (user_yes_no_query("Time-integrate spectra and store in /processed_data/spectra folder?")==True)):
             intensity = np.zeros_like(self.freq_grid)
             for i in range(self.i_start, self.i_end+1): # loop over intensity
                 i_folderpath = os.path.join(inputParameters.basepath, "i" + str(i))
@@ -425,7 +426,6 @@ class extract:
         # Build superconfiguration strings
         for i in range(len(charge_range)):
             superconfigs.append(periodic_table[str(num_electrons[i])]+str(K_shell)+str(num_electrons[i]-K_shell))
-        print ("line417", superconfigs)
         # Match superconfigs with atomic data strings to get full configuration and indices
         with open(atomic_data_file,'r') as atomfile:
             for line in atomfile:
@@ -637,7 +637,6 @@ class extract:
                 " till ", int(max(charge_range)),"Rate process:",rate_process,"State:",state,"Time","\t".join(popstring)))
             # Compute f-scan weighted rates
             if (fscan_flag==True):
-                print(rates_fscan.shape, weights.shape, rates_out.shape)
                 rates_fscan += weights[i-1]*rates_out
                 if (i == self.i_end):
                     np.savetxt(ratesfscan_file, np.concatenate((time_out[:,None],rates_fscan),axis=1), fmt='%1.4e', delimiter='\t', newline='\n',\
