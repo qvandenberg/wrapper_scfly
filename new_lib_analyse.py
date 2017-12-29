@@ -713,6 +713,20 @@ class extract:
 
 
 
+def decimalToRoman2(n):
+    divs = [1000, 900, 500, 400,
+             100,  90,  50,  40,
+              10,  9,   5,    4, 1]
+    symbols = ['M', 'CM', 'D', 'CD',
+               'C', 'XC', 'L', 'XL',
+               'X', 'IX', 'V', 'IV', 'I']
+    vals = list()
+    for i,d in enumerate(divs):
+        x = n/d
+        if x:
+            vals.append(symbols[i]*x)
+            n = n%d
+    return ''.join(vals)
 
 
 
