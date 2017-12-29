@@ -31,8 +31,8 @@ spec.fscan(supergauss_parameters)
 # spec.fscan('/Users/Quincy/Documents/Code/SCFLY_analysis/fscanweights_Sam')
 
 ## Smoothening of spectra
-# spec.broaden(np.linspace(1,20,20), 200, 'GAUSS') # (vector of folders, width [ev], lineshape)
-# spec.broaden('TOTAL', 200, 'GAUSS') # (vector of folders, width [ev], lineshape)
+# spec.smoothen(np.linspace(1,20,20, dtype='int'), 1, 'hanning') # (vector of folders, width [ev], window shape)
+spec.smoothen('TOTAL', 1, 'hanning') # (vector of folders, width [ev], window shape)
 
 ## Extract: temperature-density conditions, population, rates
 extract = extract(input_parameters)

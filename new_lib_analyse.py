@@ -292,20 +292,73 @@ class spectra:
         # plt.show()
         return
 
-    def broaden(self, i_folders, sigma, line_shape):
-        # Somehow this results in negative spectra. Fix first before applying.
-        print ("Fix broaden/smoothen bug first before using further.")
-        if (i_folders[-1]-i_folders[0]>1 and len(i_folders==2)):
-            i_folders=np.linspace(i_folders[0],i_folders[1],i_folders[-1]-i_folders[0]+1, dtype = 'int')
+    def savitzky_golay(self, y, window_size, order, deriv=0, rate=1):
+        order = 2
+        # http://scipy.github.io/old-wiki/pages/Cookbook/SavitzkyGolay
+        try:
+            window_size = np.abs(np.int(window_size))
+            order = np.abs(np.int(order))
+        except ValueError:
+            raise ValueError("window_size and order have to be of type int")
+        if window_size % 2 != 1 or window_size < 1:
+            raise TypeError("window_size size must be a positive odd number")
+        if window_size < order + 2:
+            raise TypeError("window_size is too small for the polynomials order")
+        order_range = range(order+1)
+        half_window = (window_size -1) // 2
+        # precompute coefficients
+        b = np.mat([[k**i for i in order_range] for k in range(-half_window, half_window+1)])
+        print(b)
+        m = np.linalg.pinv(b).A[deriv] * rate**deriv * factorial(deriv)
+        # pad the signal at the extremes with
+        # values taken from the signal itself
+        firstvals = y[0] - np.abs( y[1:half_window+1][::-1] - y[0] )
+        lastvals = y[-1] + np.abs(y[-half_window-1:-1][::-1] - y[-1])
+        y = np.concatenate((firstvals, y, lastvals))
+        return np.convolve( m[::-1], y, mode='valid')
 
+    def windowConvolve (self, x,window_len=11,window='hanning'):
+        # http://scipy-cookbook.readthedocs.io/items/SignalSmooth.html
+        # https://stackoverflow.com/questions/20618804/how-to-smooth-a-curve-in-the-right-way
+        if x.ndim != 1:
+            raise ValueError ("windowConvolve only accepts 1 dimension arrays.")
+
+        if x.size < window_len:
+            raise ValueError ("Input vector needs to be bigger than window size.")
+        if window_len<3:
+            return x
+        if not window in ['flat', 'hanning', 'hamming', 'bartlett', 'blackman']:
+            raise ValueError ("Window is on of 'flat', 'hanning', 'hamming', 'bartlett', 'blackman' ")
+        s=np.r_[x[window_len-1:0:-1],x,x[-2:-window_len-1:-1]]
+        #print(len(s))
+        if window == 'flat': #moving average
+            w=numpy.ones(window_len,'d')
+        else:
+            w=eval('np.'+window+'(window_len)')
+        y=np.convolve(w/w.sum(),s,mode='same') # if mode is changed to 'valid', adjust 'restore original length' section
+        # Restore original length (result of padding with mirrored windows on endpoints)
+        y = y[window_len:len(x)+window_len]
+
+
+        print("Line 340:", len(x),len(y[window_len:len(x)+window_len]))
+        plt.plot(x,label='original')
+        plt.plot(y,label='smooth') # [round(window_len/2):]
+        plt.legend()
+        plt.show()
+        return y
+
+    def smoothen(self, i_folders, eV_width, window_shape):
         if (isinstance(i_folders,(list, tuple, np.ndarray))==True):
+            if ((i_folders[-1]-i_folders[0])>1 and len(i_folders==2)):
+                i_folders=np.linspace(i_folders[0],i_folders[1],i_folders[-1]-i_folders[0]+1, dtype = 'int')
             for i in i_folders:
                 # Save copy of original spectrum and update log file
-                if not os.path.isdir(self.basepath+"/processed_data/spectra/oldcopies"):
+                if i==i_folders[0] and os.path.isdir(os.path.join(self.basepath,"processed_data/spectra/oldcopies"))==False:
                     print ('Created directory for old copies of spectra')
                     call(["mkdir",self.basepath+"/processed_data/spectra/oldcopies"])
-                call("cp "+self.basepath+"/processed_data/spectra/time-integrated_i"+str(int(i)) +' '+self.basepath+"/processed_data/spectra/oldcopies/time-integrated_i"+str(int(i))+'_'+datetime.datetime.now().strftime("%Y-%m-%d-%H:%M:%S").replace(' ','_'),shell=True)
-                self.logfile.write('Broadened i'+str(int(i))+' spectrum by a %s line shape with width: %1.2f \n' %(line_shape, sigma))
+                call(["cp", os.path.join(self.basepath,"processed_data/spectra","time-integrated_i"+str(int(i))),\
+                 os.path.join(self.basepath,"processed_data/spectra/oldcopies","time-integrated_i"+str(int(i))+'_'+datetime.datetime.now().strftime("%Y-%m-%d-%H:%M:%S").replace(' ','_'))])
+                self.logfile.write('Broadened i'+str(int(i))+' spectrum by a %s window shape with width: %1.2f eV\n' %(window_shape, eV_width))
                 self.logfile.write('Copy of i'+str(int(i))+' spectrum made with timestamp '+datetime.datetime.now().strftime("%Y-%m-%d-%H:%M:%S")+ "\n" %())
 
                 # Read spectra from file
@@ -314,61 +367,62 @@ class spectra:
                 x = data[:,0] # energy, eV
                 y = data[:,1] # intensity
 
-                # Construct line shape
-                L = max(x)-min(x)
-                x_convolve = np.linspace(-L/2,L/2,len(x))
+                # Smoothening
+                window_length = ceil(eV_width/np.diff(self.freq_grid)[0])
+                print("window: ", window_length)
+                if window_length%2==0:
+                    window_length+=1
+                # smooth_spectrum = self.savitzky_golay(y, window_size=window_length, order=2, deriv=0)
+                smooth_spectrum = self.windowConvolve(y,window_len =window_length, window=window_shape)
 
-                if line_shape == 'GAUSS':
-                    y_convolve = lambda x_convolve: np.exp(-x_convolve**2/(2*sigma**2))
-                    norm = integrate.quad(y_convolve,-L/2,L/2)[0]
-                else:
-                    print ("Currently only supports Gaussian lineshape. Supply argument \'GAUSS\'")
-                    return
-                # Convolve original spectrum with line shape for smoothening
-                y_convolve = np.exp(-x_convolve**2/(2*sigma**2))/norm
-                y_smooth = np.convolve(y, y_convolve, mode='same')
-                y_smooth = y_smooth*np.trapz(x,y)/np.trapz(x,y_smooth)
-                # Write result to file
-                file_specout = open(datapath,'w')
-                file_specout.write("%s\t%s\n" %('E [eV]','Intensity'))
-                for k in range(len(x)):
-                    file_specout.write("%1.2f %1.4e\n" %(x[k],y_smooth[k]))
-                file_specout.close()
+                ## Write result to file
+                print('Line 342: ', np.column_stack([x, smooth_spectrum]).shape)
+
+                # np.savetxt(datapath, np.column_stack([x, smooth_spectrum]) ,fmt="%1.2f %1.4e", delimiter="\t", newline="\n", header= 'E [eV]\tIntensity')
+
+                # file_specout = open(datapath,'w')
+                # file_specout.write("%s\t%s\n" %('E [eV]','Intensity'))
+                # for k in range(len(x)):
+                #     file_specout.write("%1.2f %1.4e\n" %(x[k],smooth_spectrum[k]))
+                # file_specout.close()
                 return
         elif (i_folders == 'TOTAL'):
             # Save copy of original spectrum and update log file
-            if not os.path.exists(self.basepath+"/processed_data/spectra/oldcopies"):
+            if not os.path.exists(os.path.join(self.basepath,"processed_data/spectra/oldcopies")):
                 print ('Created directory for old copies of spectra')
-                call(["mkdir",self.basepath+"/processed_data/spectra/oldcopies"])
-            call("cp "+self.basepath+"/processed_data/spectra/time-integrated_total "+' '+self.basepath+"/processed_data/spectra/oldcopies/time-integrated_total_"+datetime.datetime.now().strftime("%Y-%m-%d-%H:%M:%S").replace(' ','_'),shell=True)
-            self.logfile.write('Broadened total spectrum by a %s line shape with width: %1.2f \n' %(line_shape, sigma))
+                call(["mkdir",os.path.join(self.basepath,"processed_data/spectra/oldcopies")])
+            call(["cp",os.path.join(self.basepath,"processed_data/spectra","time-integrated_total"),\
+              os.path.join(self.basepath,"processed_data/spectra/oldcopies",\
+              "time-integrated_total_"+datetime.datetime.now().strftime("%Y-%m-%d-%H:%M:%S").replace(' ','_'))])
+            self.logfile.write('Broadened total spectrum by a %s window shape with width: %1.2f eV\n' %(window_shape, eV_width))
             self.logfile.write('Copy of original spectrum made with timestamp '+datetime.datetime.now().strftime("%Y-%m-%d-%H:%M:%S")+ "\n")
 
             # Read spectra from file
-            datapath = self.basepath+"/processed_data/spectra/time-integrated_total"
+            datapath = os.path.join(self.basepath,"processed_data/spectra/time-integrated_total")
             data = np.loadtxt(datapath, skiprows=1)
             x = data[:,0] # energy, eV
             y = data[:,1] # intensity
 
-            # Construct line shape
-            L = max(x)-min(x)
-            x_convolve = np.linspace(-L/2,L/2,len(x))
+            # Smoothening
+            window_length = ceil(eV_width/np.diff(self.freq_grid)[0])
+            if window_length%2==0:
+                window_length+=1
+            # smooth_spectrum = self.savitzky_golay(y, window_size=window_length, order=2, deriv=0)
+            smooth_spectrum = self.windowConvolve(y,window_len =window_length, window=window_shape)
+            # plt.plot(x,y,label='original')
+            # plt.plot(x,smooth_spectrum,label='smooth')
+            # plt.legend()
+            # plt.show()
 
-            if line_shape == 'GAUSS':
-                self.line_shape = 'GAUSS'
-                y_convolve = lambda x_convolve: np.exp(-x_convolve**2/(2*sigma**2))
-                norm = integrate.quad(y_convolve,-L/2,L/2)[0]
-            else:
-                print ("Currently only supports Gaussian lineshape. Supply argument \'GAUSS\'")
-            y_convolve = np.exp(-x_convolve**2/(2*sigma**2))/norm
-            y_smooth = np.convolve(y, y_convolve, mode='same')
-            y_smooth = y_smooth*np.trapz(x,y)/np.trapz(x,y_smooth)
-            # Write result to file
-            file_specout = open(datapath,'w')
-            file_specout.write("%s\t%s\n" %('E [eV]','Intensity'))
-            for k in range(len(x)):
-                file_specout.write("%1.2f %1.4e\n" %(x[k],y_smooth[k]))
-            file_specout.close()
+
+            ## Write result to file
+            # np.savetxt(datapath, np.column_stack([x, smooth_spectrum]) ,fmt="%1.2f %1.4e", delimiter="\t", newline="\n", header= 'E [eV]\tIntensity')
+
+            # file_specout = open(datapath,'w')
+            # file_specout.write("%s\t%s\n" %('E [eV]','Intensity'))
+            # for k in range(len(x)):
+            #     file_specout.write("%1.2f %1.4e\n" %(x[k],y_smooth[k]))
+            # file_specout.close()
             return
         else:
             print ("Either operate on an numpy vector of input directories, or the total f-scan weighted spectrum. Check input arguments.")
