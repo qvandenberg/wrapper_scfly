@@ -152,7 +152,7 @@ class spectra:
         self.logfile = open(os.path.join(self.basepath,"processed_data/spectra","intspec.log"),'w')
 
         # Determine time and intensity steps to consider, and frequency grid
-        self.freq_grid = inputParameters.HVrange
+        self.freq_grid = np.linspace(min(inputParameters.HVrange),max(inputParameters.HVrange),3*len(inputParameters.HVrange));
 
         i_min, i_max = 1, 0
         for directory in os.listdir(inputParameters.basepath):
@@ -178,7 +178,8 @@ class spectra:
 
     def time_integrate(self, inputParameters): # inputParameters, i_start=None,i_end=None,t_start=None,t_end=None
         # Integrate all intensities independently
-        if (os.path.isdir(self.basepath+"/processed_data/spectra")&(user_yes_no_query("Overwrite old /processed_data/spectra folder?")==True)):
+        if (os.path.isdir(self.basepath+"/processed_data/spectra")\
+          and (user_yes_no_query("Time-integrate spectra and store in /processed_data/spectra folder?")==True)):
             intensity = np.zeros_like(self.freq_grid)
             for i in range(self.i_start, self.i_end+1): # loop over intensity
                 i_folderpath = os.path.join(inputParameters.basepath, "i" + str(i))
@@ -190,7 +191,8 @@ class spectra:
                     idx = 1 # if args.is_intensity else 3
                     intens = data[:,idx]
                     # interpolate the intensity
-                    intensity += np.interp(self.freq_grid, freqs, intens)
+                    I=interpolate.interp1d(freqs, intens, kind='linear', bounds_error=None, fill_value="extrapolate", assume_sorted=False)
+                    intensity += I(self.freq_grid)
 
                 # Write out intensities to file
                 file_specout = open(os.path.join(self.basepath,"processed_data/spectra","time-integrated_i"+str(i)),'w')
@@ -200,16 +202,16 @@ class spectra:
                     file_specout.write("%1.2f %1.4e\n" %(self.freq_grid[k],intensity[k]))
                     # print ("%1.2f %1.4e\n" %(self.freq_grid[k],intensity[k]))
                 file_specout.close()
-            print ("Time-integrated spectra written to folder ",self.basepath+"/processed_data/spectra/")
+            print ("Time-integrated spectra written to folder %s" %(os.path.join(self.basepath,"processed_data/spectra")))
         else:
-            print ("Time-integrated spectra already exist in folder %s." %(self.basepath+"/processed_data/spectra"))
+            print ("Time-integrated spectra already exist in folder %s" %(os.path.join(self.basepath,"processed_data/spectra")))
 
         return
             # Plot for inspection
             # plt.plot(self.freq_grid, intensity)
             # plt.show()
 
-    def fscan(self, supergauss_parameters, i_start = None, i_end=None):
+    def fscan(self, supergauss_parameters, i_start = None, i_end=None, path=""):
         # generalise to do the same for temperature, density, population
         if i_start == None:
             i_start = self.i_start
@@ -217,21 +219,43 @@ class spectra:
             i_end = self.i_end
         ## Spectrum
         intensity_grid = np.loadtxt(os.path.join(self.basepath, 'intensity_grid.dat'), skiprows=0)
-        intensity_grid[:,0]= [int(i) for i in intensity_grid[:,0]] # map(int,intensity_grid[:,0])
+        intensity_grid[:,0]= [int(i) for i in intensity_grid[:,0]] #
         intensity_grid[:,1]= intensity_grid[:,1]/max(intensity_grid[:,1])
 
-        # Calculate super-gauss function on a grid
-        S_fscan = np.linspace(0,500,25000)
-        I_fscan_unnormalised = supergauss_parameters[0]*np.exp(-np.power(S_fscan/supergauss_parameters[1],supergauss_parameters[2]))
-        + supergauss_parameters[3]*np.exp(-np.power(S_fscan/supergauss_parameters[4],supergauss_parameters[5]))
-        I_fscan = I_fscan_unnormalised/max(I_fscan_unnormalised)
+        if os.path.isfile(os.path.abspath(path))==True:
+            surface_weights = np.loadtxt(os.path.abspath(path),skiprows=1)[:,2];
+        elif len(path)==0 or os.path.isfile(os.path.isfile(path))==False:
+            if os.path.isfile(os.path.isfile(path))==False:
+                print("F-scan calculated from Supergauss parameters.")
+            # Calculate super-gauss function on a grid
+            S_fscan = np.linspace(0,2000,25000)
+            I_fscan_unnormalised = supergauss_parameters[0]*np.exp(-np.power(S_fscan/supergauss_parameters[1],supergauss_parameters[2]))
+            + supergauss_parameters[3]*np.exp(-np.power(S_fscan/supergauss_parameters[4],supergauss_parameters[5]))
+            I_fscan = I_fscan_unnormalised/max(I_fscan_unnormalised)
 
-        # interpolate simulated intensity_grid onto super-gauss function to obtain weights
-        S_interpolated = np.interp(intensity_grid[:,1], I_fscan[::-1], S_fscan[::-1]) # swap direction x, y to make them increasing
-        surface_weights = np.convolve(S_interpolated, np.ones((2,))/2)[(2-1):]
-        surface_weights = np.diff(S_interpolated,n=1) # this operation reduces array length by one
-        surface_weights = np.append(surface_weights, 2*surface_weights[-1]-surface_weights[-2]) # duplicate last item to restore length with lin extrapolation
-        surface_weights = surface_weights/sum(surface_weights)
+            # Interpolate with scipy 28.12.2017
+            surface_function = interpolate.interp1d(I_fscan, S_fscan);
+            surface_grid = surface_function(intensity_grid[:,1])
+            avg_surface_grid = []
+            for i in range(1,len(surface_grid)): # avg of surface grid
+                avg_surface_grid.append(0.5*(surface_grid[i]+surface_grid[i-1]))
+            avg_surface_grid.insert(0,0.0)
+            enclosed_area =[]
+            for i in range(1,len(avg_surface_grid)): # diff of avg
+                enclosed_area.append(avg_surface_grid[i]-avg_surface_grid[i-1])
+            enclosed_area.append(2*enclosed_area[-1]-enclosed_area[-2]) # extrapolate last point to restore length
+            # Normalise
+            surface_weights = enclosed_area/sum(enclosed_area)
+            # print(intensity_grid[:,1], surface_grid)
+            # fig, ax = plt.subplots(figsize=(10,13));
+            # plt.plot(S_fscan, I_fscan, label='original profile')
+            # plt.plot(surface_grid, intensity_grid[:,1],'rx', label='grid samples')
+            # plt.xlim(0,100)
+            # plt.show()
+        else:
+            "Specify either super-gauss parameters or file with f-scan weights."
+            return
+
 
         # weigh spectra to form total spectrum
         total_spectrum = np.zeros((len(self.freq_grid),))
@@ -240,10 +264,6 @@ class spectra:
             data = np.loadtxt(datapath, skiprows=1)
             x = data[:,0] # energy, eV
             y = data[:,1] # intensity
-            # Plot for inspection
-            # if i==10:
-            # plt.plot(x, y)
-            # plt.show()
             total_spectrum += surface_weights[i]*np.interp(self.freq_grid,x,y)
 
         # Write weights to file
@@ -381,8 +401,7 @@ class extract:
         configobject = {}
         superconfigs = []
         indices = []
-        a=[]
-# Compatibility checks
+        # Compatibility checks
         if (max(charge_range)==Z):
             print ("Maximum charge range must be smaller than Z.")
             return
@@ -421,7 +440,6 @@ class extract:
         # Build superconfiguration strings
         for i in range(len(charge_range)):
             superconfigs.append(periodic_table[str(num_electrons[i])]+str(K_shell)+str(num_electrons[i]-K_shell))
-        print ("line417", superconfigs)
         # Match superconfigs with atomic data strings to get full configuration and indices
         with open(atomic_data_file,'r') as atomfile:
             for line in atomfile:
@@ -518,7 +536,6 @@ class extract:
 
         # Construct charge and material dependence to build population string in dedicated function
         popstring = self.superconfiguration(inputParameters.Z,charge_range,state)["configs"]
-        print (popstring)
         # popstring = [" f_180002", " o_170002", " n_160002", " c_150002", " b_140002", " be130002", " li120002", " he110002"]
 
         # Loop over states
@@ -587,7 +604,7 @@ class extract:
             weights = data[:,2]
             rates_fscan = np.zeros([int(self.t_end)-int(self.t_start), len(charge_range)]) # time, charge, per i-folder
 
-            ratesfscan_file = open(os.path.join(self.basepath,"processed_data/rates", "z"+str(inputParameters.Z)+"_"+rate_process+"_fscan"),'wb')
+            ratesfscan_file = open(os.path.join(self.basepath,"processed_data/rates", "z"+str(inputParameters.Z)+"_"+state+"_"+rate_process+"_fscan"),'wb')
             self.rates_logfile.write('\nCalculated averaged rates from f-scan weighted rates.\n')
             self.rates_logfile.write("f-scan weights used:\n")
             self.rates_logfile.write('\t'.join(map(str,np.around(weights,5))))
@@ -633,7 +650,6 @@ class extract:
                 " till ", int(max(charge_range)),"Rate process:",rate_process,"State:",state,"Time","\t".join(popstring)))
             # Compute f-scan weighted rates
             if (fscan_flag==True):
-                print(rates_fscan.shape, weights.shape, rates_out.shape)
                 rates_fscan += weights[i-1]*rates_out
                 if (i == self.i_end):
                     np.savetxt(ratesfscan_file, np.concatenate((time_out[:,None],rates_fscan),axis=1), fmt='%1.4e', delimiter='\t', newline='\n',\
