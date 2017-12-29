@@ -293,7 +293,7 @@ class spectra:
         return
 
     def savitzky_golay(self, y, window_size, order, deriv=0, rate=1):
-        order = 2
+        # Malfunctions on np.linalg.pinv(b) if order is over 9
         # http://scipy.github.io/old-wiki/pages/Cookbook/SavitzkyGolay
         try:
             window_size = np.abs(np.int(window_size))
@@ -338,13 +338,11 @@ class spectra:
         y=np.convolve(w/w.sum(),s,mode='same') # if mode is changed to 'valid', adjust 'restore original length' section
         # Restore original length (result of padding with mirrored windows on endpoints)
         y = y[window_len:len(x)+window_len]
-
-
-        print("Line 340:", len(x),len(y[window_len:len(x)+window_len]))
-        plt.plot(x,label='original')
-        plt.plot(y,label='smooth') # [round(window_len/2):]
-        plt.legend()
-        plt.show()
+        y = y * x.sum()/y.sum()
+        # plt.plot(x,label='original')
+        # plt.plot(y,label='smooth') # [round(window_len/2):]
+        # plt.legend()
+        # plt.show()
         return y
 
     def smoothen(self, i_folders, eV_width, window_shape):
@@ -369,16 +367,16 @@ class spectra:
 
                 # Smoothening
                 window_length = ceil(eV_width/np.diff(self.freq_grid)[0])
-                print("window: ", window_length)
-                if window_length%2==0:
-                    window_length+=1
-                # smooth_spectrum = self.savitzky_golay(y, window_size=window_length, order=2, deriv=0)
-                smooth_spectrum = self.windowConvolve(y,window_len =window_length, window=window_shape)
+                window_length = (lambda: window_length, lambda: window_length+1)[window_length%2 ==0]()
+
+                if window_shape == 'savitzky_golay':
+                    smooth_spectrum = self.savitzky_golay(y, window_size=window_length, order=2, deriv=0)
+                else:
+                    smooth_spectrum = self.windowConvolve(y,window_len =window_length, window=window_shape)
 
                 ## Write result to file
-                print('Line 342: ', np.column_stack([x, smooth_spectrum]).shape)
 
-                # np.savetxt(datapath, np.column_stack([x, smooth_spectrum]) ,fmt="%1.2f %1.4e", delimiter="\t", newline="\n", header= 'E [eV]\tIntensity')
+                np.savetxt(datapath, np.column_stack([x, smooth_spectrum]) ,fmt="%1.2f %1.4e", delimiter="\t", newline="\n", header= 'E [eV]\tIntensity')
 
                 # file_specout = open(datapath,'w')
                 # file_specout.write("%s\t%s\n" %('E [eV]','Intensity'))
@@ -405,10 +403,11 @@ class spectra:
 
             # Smoothening
             window_length = ceil(eV_width/np.diff(self.freq_grid)[0])
-            if window_length%2==0:
-                window_length+=1
-            # smooth_spectrum = self.savitzky_golay(y, window_size=window_length, order=2, deriv=0)
-            smooth_spectrum = self.windowConvolve(y,window_len =window_length, window=window_shape)
+            window_length = (lambda: window_length, lambda: window_length+1)[window_length%2 ==0]()
+            if window_shape == 'savitzky_golay':
+                smooth_spectrum = self.savitzky_golay(y, window_size=window_length, order=2, deriv=0)
+            else:
+                smooth_spectrum = self.windowConvolve(y,window_len =window_length, window=window_shape)
             # plt.plot(x,y,label='original')
             # plt.plot(x,smooth_spectrum,label='smooth')
             # plt.legend()
@@ -416,7 +415,7 @@ class spectra:
 
 
             ## Write result to file
-            # np.savetxt(datapath, np.column_stack([x, smooth_spectrum]) ,fmt="%1.2f %1.4e", delimiter="\t", newline="\n", header= 'E [eV]\tIntensity')
+            np.savetxt(datapath, np.column_stack([x, smooth_spectrum]) ,fmt="%1.2f %1.4e", delimiter="\t", newline="\n", header= 'E [eV]\tIntensity')
 
             # file_specout = open(datapath,'w')
             # file_specout.write("%s\t%s\n" %('E [eV]','Intensity'))
