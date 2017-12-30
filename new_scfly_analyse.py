@@ -28,7 +28,7 @@ spec.time_integrate(input_parameters)
 ## Apply f-scan. Apply either with supergauss parameters or with file path to weights. Make sure spectra are written out before executing this part.
 supergauss_parameters = [0.957467, 3.54691, 0.46181, 0.042533, 0.1929, 0.21648] #
 spec.fscan(supergauss_parameters)
-# spec.fscan('/Users/Quincy/Documents/Code/SCFLY_analysis/fscanweights_Sam')
+# spec.fscan(path='/Users/Quincy/Documents/Code/SCFLY_analysis/fscan_weights/fscanweights_Sam')
 
 ## Smoothening of spectra
 spec.smoothen(np.linspace(1,20,20, dtype='int'), 1.5, 'hanning') # (vector of folders, width [ev], window shape)

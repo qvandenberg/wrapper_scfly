@@ -211,7 +211,7 @@ class spectra:
             # plt.plot(self.freq_grid, intensity)
             # plt.show()
 
-    def fscan(self, supergauss_parameters, i_start = None, i_end=None, path=""):
+    def fscan(self, supergauss_parameters=None, i_start = None, i_end=None, path=""):
         # generalise to do the same for temperature, density, population
         if i_start == None:
             i_start = self.i_start
@@ -222,9 +222,20 @@ class spectra:
         intensity_grid[:,0]= [int(i) for i in intensity_grid[:,0]] #
         intensity_grid[:,1]= intensity_grid[:,1]/max(intensity_grid[:,1])
 
-        if os.path.isfile(os.path.abspath(path))==True:
-            surface_weights = np.loadtxt(os.path.abspath(path),skiprows=1)[:,2];
-        elif len(path)==0 or os.path.isfile(os.path.isfile(path))==False:
+        if supergauss_parameters is None and os.path.isfile(os.path.abspath(path))==True: # from file
+            data = np.loadtxt(os.path.abspath(path),skiprows=1);
+            Igrid_map = data[:,1]
+            surface_map = data[:,2]
+            fileweights = surface_map/surface_map.sum()
+            file_fscanweights = interpolate.interp1d(Igrid_map,fileweights, fill_value='extrapolate')
+            surface_weights = file_fscanweights(intensity_grid[:,1])
+            # Normalise
+            surface_weights = surface_weights/sum(surface_weights)
+            # plt.plot(Igrid_map,fileweights,'rx',label="original from file")
+            # plt.plot(intensity_grid[:,1],surface_weights,'bo',label="interpolated")
+            # plt.legend()
+            # plt.show()
+        elif ((len(path)==0 or os.path.isfile(os.path.isfile(path))==False) and supergauss_parameters is not None): # from super gauss parameters
             if os.path.isfile(os.path.isfile(path))==False:
                 print("F-scan calculated from Supergauss parameters.")
             # Calculate super-gauss function on a grid
@@ -246,6 +257,7 @@ class spectra:
             enclosed_area.append(2*enclosed_area[-1]-enclosed_area[-2]) # extrapolate last point to restore length
             # Normalise
             surface_weights = enclosed_area/sum(enclosed_area)
+
             # print(intensity_grid[:,1], surface_grid)
             # fig, ax = plt.subplots(figsize=(10,13));
             # plt.plot(S_fscan, I_fscan, label='original profile')
@@ -253,24 +265,28 @@ class spectra:
             # plt.xlim(0,100)
             # plt.show()
         else:
-            "Specify either super-gauss parameters or file with f-scan weights."
+            print("Specify either super-gauss parameters or file with f-scan weights. Aborted fscan()")
             return
 
-
-        # weigh spectra to form total spectrum
+        # sum up contributions to form total spectrum
         total_spectrum = np.zeros((len(self.freq_grid),))
         for i in range(len(surface_weights)):
             datapath = os.path.join(self.basepath,"processed_data/spectra","time-integrated_i"+str(int(i+1)))
             data = np.loadtxt(datapath, skiprows=1)
             x = data[:,0] # energy, eV
             y = data[:,1] # intensity
-            total_spectrum += surface_weights[i]*np.interp(self.freq_grid,x,y)
+            spectrum_contribution = interpolate.interp1d(x,y,fill_value='extrapolate')
+            total_spectrum += surface_weights[i]*spectrum_contribution(self.freq_grid)
+
+            # if i%5==0: ## Plot for inspection
+            #     plt.plot(self.freq_grid, total_spectrum)
+            #     plt.show()
 
         # Write weights to file
         file_weights = open(os.path.join(self.basepath,"processed_data","fscanweights"),'w')
         file_weights.write("%s\t%s\t%s\n" %('Index','Intensity','Weight'))
         for k in range(len(surface_weights)):
-            file_weights.write("%d %1.4e %1.4e\n" %(k+1, I_fscan_unnormalised[k], surface_weights[k]))
+            file_weights.write("%d %1.4e %1.4e\n" %(k+1, intensity_grid[k,1], surface_weights[k]))
 
         # Write spectrum to file
         file_specout = open(os.path.join(self.basepath,"processed_data/spectra","time-integrated_total"),'w')
@@ -281,15 +297,16 @@ class spectra:
 
         # Update log file
         self.logfile.write('Constructed total spectrum from f-scan weighted spectra.\n')
-        self.logfile.write("f-scan super-gauss parameters used are [%1.2f, %1.2f, %1.2f, %1.2f, %1.2f, %1.2f] \n" %(supergauss_parameters[0], supergauss_parameters[1],
-        supergauss_parameters[2], supergauss_parameters[3], supergauss_parameters[4], supergauss_parameters[5]))
+        if supergauss_parameters is not None:
+            self.logfile.write("f-scan super-gauss parameters used are [%1.2f, %1.2f, %1.2f, %1.2f, %1.2f, %1.2f] \n" %(supergauss_parameters[0], supergauss_parameters[1],
+            supergauss_parameters[2], supergauss_parameters[3], supergauss_parameters[4], supergauss_parameters[5]))
+        elif len(path)>0:
+            self.logfile.write("f-scan weights read from file:\t %s" %(path))
         self.logfile.write("f-scan weights used:\n")
         self.logfile.write('\t'.join(map(str,np.around(surface_weights,5))))
         self.logfile.write("\n")
 
-        ## Plot for inspection
-        # plt.plot(self.freq_grid, total_spectrum)
-        # plt.show()
+        print("f-scan performed on folders: %d to %d" %(i_start, i_end))
         return
 
     def savitzky_golay(self, y, window_size, order, deriv=0, rate=1):
