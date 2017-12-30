@@ -152,7 +152,7 @@ class spectra:
         self.logfile = open(os.path.join(self.basepath,"processed_data/spectra","intspec.log"),'w')
 
         # Determine time and intensity steps to consider, and frequency grid
-        self.freq_grid = np.linspace(min(inputParameters.HVrange),max(inputParameters.HVrange),3*len(inputParameters.HVrange));
+        self.freq_grid = np.linspace(min(inputParameters.HVrange),max(inputParameters.HVrange),4*len(inputParameters.HVrange));
 
         i_min, i_max = 1, 0
         for directory in os.listdir(inputParameters.basepath):

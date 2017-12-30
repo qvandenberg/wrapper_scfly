@@ -26,13 +26,14 @@ spec = spectra(input_parameters) # (input parameters, i_start, i_end, t_start, t
 spec.time_integrate(input_parameters)
 
 ## Apply f-scan. Apply either with supergauss parameters or with file path to weights. Make sure spectra are written out before executing this part.
-supergauss_parameters = [0.957467, 3.54691, 0.46181, 0.042533, 0.1929, 0.21648] #
+supergauss_parameters = [0.518601, 9.03154, 0.49322, 0.481399, 0.00063, 0.14464] # 1180 eV measurement 2
+supergauss_parameters = [0.957467, 3.54691, 0.46181, 0.042533, 0.1929, 0.21648] # 1400 eV measurement 4
 spec.fscan(supergauss_parameters)
 # spec.fscan(path='/Users/Quincy/Documents/Code/SCFLY_analysis/fscan_weights/fscanweights_Sam')
 
 ## Smoothening of spectra
 spec.smoothen(np.linspace(1,20,20, dtype='int'), 1.5, 'hanning') # (vector of folders, width [ev], window shape)
-spec.smoothen('TOTAL', 1.5, 'hanning') # (vector of folders, width [ev], window shape)
+spec.smoothen('TOTAL', 4.5, 'hanning') # (vector of folders, width [ev], window shape)
 
 ## Extract: temperature-density conditions, population, rates
 extract = extract(input_parameters)
